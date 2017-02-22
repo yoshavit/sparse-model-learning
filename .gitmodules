@@ -1,0 +1,3 @@
+[submodule "gym-mnist"]
+	path = gym-mnist
+	url = https://github.com/yo-shavit/gym-mnist.git

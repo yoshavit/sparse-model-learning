@@ -140,7 +140,7 @@ def conv2d(x, num_filters, name, filter_size=(3, 3), stride=(1, 1), pad="SAME", 
 
         w = tf.get_variable("W", filter_shape, dtype, tf.random_uniform_initializer(-w_bound, w_bound),
                             collections=collections)
-        b = tf.get_variable("b", [1, 1, 1, num_filters], initializer=tf.zeros_initializer,
+        b = tf.get_variable("b", [1, 1, 1, num_filters], initializer=tf.zeros_initializer(),
                             collections=collections)
 
         if summary_tag is not None:
@@ -156,7 +156,7 @@ def dense(x, size, name, weight_init=None, bias=True):
     w = tf.get_variable(name + "/w", [x.get_shape()[1], size], initializer=weight_init)
     ret = tf.matmul(x, w)
     if bias:
-        b = tf.get_variable(name + "/b", [size], initializer=tf.zeros_initializer)
+        b = tf.get_variable(name + "/b", [size], initializer=tf.zeros_initializer())
         return ret + b
     else:
         return ret

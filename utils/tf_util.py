@@ -230,7 +230,8 @@ class _Function(object):
         self.givens = {} if givens is None else givens
         self.check_nan = check_nan
     def __call__(self, *inputvals):
-        assert len(inputvals) == len(self.inputs)
+        assert len(inputvals) == len(self.inputs), "%d vs %d"%(len(inputvals),
+                                                               len(self.inputs))
         feed_dict = dict(zip(self.inputs, inputvals))
         feed_dict.update(self.givens)
         results = get_session().run(self.outputs_update, feed_dict=feed_dict)[:-1]

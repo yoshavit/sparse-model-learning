@@ -17,8 +17,12 @@ def save_scope(outfile, scope):
     np.savez(outfile, **weight_dict)
 
 def get_scope_vars(scope):
+    if isinstance(scope, str):
+        scopename = scope
+    else:
+        scopename = scope.name
     return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
-                             scope=scope.name)
+                             scope=scopename)
 
 def load_scope(infile, scope):
     ## Get pretrained scaled weights into graph.

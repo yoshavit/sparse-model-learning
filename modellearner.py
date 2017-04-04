@@ -1,5 +1,4 @@
 import gym
-import gym_mnist
 import numpy as np
 import tensorflow as tf
 import random
@@ -20,6 +19,7 @@ from utils.save_and_load import get_scope_vars
 REPLAY_MEMORY_SIZE = 1500
 DEFAULT_STEPSIZE = 1e-4
 MSE_LOSS_SCALAR = 0.1
+GAMEPLAY_TIMOUT = 300 #moves
 
 """
 Create a class that takes env as input
@@ -36,8 +36,8 @@ Quantities I need to know:
 """
 
 class ModelLearner:
-
-    def __init__(self, ob_space, ac_space, max_horizon, latent_dims=10,
+    def __init__(self, ob_space, ac_space, max_horizon,
+                 is_bw = False, latent_dims=10,
                  no_encoder_gradient=False, residual=True):
         """Creates a model-learner framework
 
@@ -55,22 +55,6 @@ class ModelLearner:
         self.residual = residual
         self.max_horizon = max_horizon
         self.build_inputs()
-
-    def build_mnist_classifier_model(self, stepsize):
-         self.digit_input = U.get_placeholder("digit_input", tf.float32,
-                                             [None] + list(
-                                                 self.ob_space.shape))
-         self.logits = self.build_encoder(self.digit_input)
-         self.digit_labels = U.get_placeholder("digit_label",
-                                              tf.int32,
-                                              [None])
-         self.loss = tf.reduce_mean(
-             tf.nn.sparse_softmax_cross_entropy_with_logits(
-             logits=self.logits, labels=self.digit_labels))
-         self.train_step = tf.train.AdamOptimizer(stepsize).minimize(self.loss)
-         self.correctly_classified = tf.cast(tf.equal(tf.argmax(self.logits, axis=1),
-             tf.cast(self.digit_labels, tf.int64)), dtype=tf.float32)
-         self.classification_rate = tf.reduce_mean(self.correctly_classified)
 
     def build_inputs(self):
         self.input_states = []
@@ -220,7 +204,7 @@ class ModelLearner:
             self.encoder_scope = scope
             x = x/255.
             new_shape = list(map(lambda a: a if a!=None else -1,
-                                 x.get_shape().as_list() + [1]))
+                                 x.get_shape().as_list()  ))# + [1]))
             x = tf.reshape(x, new_shape)
             x = tf.nn.relu(U.conv2d(x, 32, "conv1", filter_size=(5,5)))
             x = tf.nn.relu(U.conv2d(x, 64, "conv2", filter_size=(5,5)))
@@ -332,7 +316,9 @@ class ModelLearner:
             obs = env.reset()
             first_step = True
             done = False
-            while not done:
+            c = 0
+            while not done and c < GAMEPLAY_TIMOUT:
+                c += 1
                 action = policy(obs)
                 new_obs, rew, done, _ = env.step(action)
                 if not first_step:
@@ -344,7 +330,8 @@ class ModelLearner:
             self.replay_memory = self.replay_memory[-REPLAY_MEMORY_SIZE:]
 
     def create_true_false_transition_dataset(self, n, fraction_true=0.5,
-                                             as_separate_lists=True):
+                                             as_separate_lists=True,
+                                             fraction_from_same_game=0):
         """ Returns state/action sequences that are true and false for training
         purposes
 
@@ -359,15 +346,19 @@ transition dataset!"
         n_false = n - n_true
         n_ac = max(transition_inds) # number of actions per sequence
         n_s = len(transition_inds) # number of states per sequence
-        transition_seqs = []
+        transition_seqs = [] # all transition sequences
+        per_game_transition_seqs = [] # game-specific transition sequences
         for game in self.replay_memory:
+            game_seqs = []
             for i in range(len(game) - n_ac + 1):
                 transitions = game[i:i+n_ac]
                 states = [transitions[j][0] for j in transition_inds[:-1]] +\
                     [transitions[-1][2]]
                 actions = [transitions[j][1] for j in range(len(transitions))]
                 transition_seqs.append([states, actions])
+                game_seqs.append([states, actions])
                 # TODO: add reward/done
+            per_game_transition_seqs.append(game_seqs)
         true_transition_seqs = random.sample(transition_seqs, n_true)
         false_transition_seqs = []
         for i in range(n_false//n_s + 1):
@@ -378,14 +369,26 @@ transition dataset!"
             # (g, h, i)    (g, b, f)
             # This creates a set of entirely incorrect transition_seqs, with the
             # assumption that a pair of random transitions is not valid
-            true_state_seqs, true_action_seqs = zip(
-                *random.sample(transition_seqs, n_s))
+
+            if random.random() < fraction_from_same_game: # Compare frames from the same game
+                valid_samples = False
+                while not valid_samples:
+                    try:
+                        true_state_seqs, true_action_seqs = zip(
+                            *random.sample(random.choice(per_game_transition_seqs), n_s))
+                        valid_samples = True
+                    except ValueError:
+                        valid_samples = False
+            else: # compare frames from different games
+                true_state_seqs, true_action_seqs = zip(
+                    *random.sample(transition_seqs, n_s))
             false_seqs = []
             for i in range(n_s):
                 # TODO: create false sequences that are more verifiably wrong
                 false_state_seq = [true_state_seqs[(i+j)%n_s][j] for j in range(n_s)]
                 true_action_seq = true_action_seqs[i]
                 false_seqs.append([false_state_seq, true_action_seq])
+
             false_transition_seqs.extend(false_seqs)
         # Need to remove the extra entries to ensure n_false total
         while len(false_transition_seqs) > n_false:
@@ -424,6 +427,7 @@ transition dataset!"
             if labels is not None:
                 is_true = labels[i]
             plt.sca(axarr[i, 0])
+            plt.axis("off")
             ac_string = ""
             for ac in ac_seq:
                 if action_names:
@@ -435,10 +439,11 @@ transition dataset!"
                 txt += ", transition is " + ("TRUE" if is_true else "FALSE")
             if get_prob:
                 txt += "\n Estimated probability: " + str(probs[i])
-            plt.text(30, 0, txt) # adjust for appropriate spacing
+            plt.text(35, 0, txt) # adjust for appropriate spacing
             plt.imshow(before, cmap="Greys")
             plt.title("Before")
             plt.sca(axarr[i, 1])
+            plt.axis("off")
             plt.imshow(after, cmap="Greys")
             plt.title("After")
         plt.pause(0.01)
@@ -455,37 +460,37 @@ class cond_scope(object):
     if self.condition:
       return self.contextmanager.__exit__(*args)
 
-    ''' 
-    def build_game_model_cmp_only(self, pos_weight_multiplier=1,
-                                  stepsize=DEFAULT_STEPSIZE):
-        """Constructs the necessary infrastructure to train a game model, using
-        the simplest architecture: compare two states, and output whether the
-        first follows from the second given a certain action.
+''' 
+def build_game_model_cmp_only(self, pos_weight_multiplier=1,
+                              stepsize=DEFAULT_STEPSIZE):
+    """Constructs the necessary infrastructure to train a game model, using
+    the simplest architecture: compare two states, and output whether the
+    first follows from the second given a certain action.
 
-        Args:
-            pos_weight_multiplier: a scalar that determines the bias of the
-                classifier towards correct positive predictions by a ratio of
-                pos_weight_multiplier:1
-        """
-        n_ac = self.ac_space.n
-        self.build_game_model_inputs()
-        self.encoded_state = self.build_encoder(self.input_state)
-        self.encoded_next_state = self.build_encoder(self.input_next_state)
-        self.logits = self.build_equater(self.encoded_state,
-                                            self.encoded_next_state,
-                                            num_outputs=n_ac)
-        self.transition_probs = tf.nn.sigmoid(self.logits)
-        action_indices = tf.one_hot(self.input_action, n_ac)
-        action_logits = tf.reduce_mean(tf.mul(self.logits, action_indices), axis=1)
-        # TODO: is boolean_mask more efficient than this trick?
-        self.prob = tf.nn.sigmoid(action_logits)
-        self.loss = tf.reduce_mean(
-            tf.nn.weighted_cross_entropy_with_logits(
-                tf.cast(self.input_is_valid, tf.float32),
-                action_logits,
-                pos_weight_multiplier))
-        self.build_diagnostics(stepsize)
-        '''
+    Args:
+        pos_weight_multiplier: a scalar that determines the bias of the
+            classifier towards correct positive predictions by a ratio of
+            pos_weight_multiplier:1
+    """
+    n_ac = self.ac_space.n
+    self.build_game_model_inputs()
+    self.encoded_state = self.build_encoder(self.input_state)
+    self.encoded_next_state = self.build_encoder(self.input_next_state)
+    self.logits = self.build_equater(self.encoded_state,
+                                        self.encoded_next_state,
+                                        num_outputs=n_ac)
+    self.transition_probs = tf.nn.sigmoid(self.logits)
+    action_indices = tf.one_hot(self.input_action, n_ac)
+    action_logits = tf.reduce_mean(tf.mul(self.logits, action_indices), axis=1)
+    # TODO: is boolean_mask more efficient than this trick?
+    self.prob = tf.nn.sigmoid(action_logits)
+    self.loss = tf.reduce_mean(
+        tf.nn.weighted_cross_entropy_with_logits(
+            tf.cast(self.input_is_valid, tf.float32),
+            action_logits,
+            pos_weight_multiplier))
+    self.build_diagnostics(stepsize)
+    '''
 
 
 

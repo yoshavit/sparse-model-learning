@@ -1,5 +1,6 @@
 import tensorflow as tf
 from tensorflow.contrib.tensorboard.plugins import projector
+import os
 import numpy as np
 import scipy.misc
 from utils import dataset
@@ -106,7 +107,7 @@ def images_to_sprite(data):
     max = np.max(data.reshape((data.shape[0], -1)), axis=1)
     data = (data.transpose(1,2,3,0) / max).transpose(3,0,1,2)
     # Inverting the colors seems to look better for MNIST
-    data = 1 - data
+    # data = 1 - data
 
     n = int(np.ceil(np.sqrt(data.shape[0])))
     padding = ((0, n ** 2 - data.shape[0]), (0, 0),

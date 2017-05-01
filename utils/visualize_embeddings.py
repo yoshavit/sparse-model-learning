@@ -3,6 +3,7 @@ from tensorflow.contrib.tensorboard.plugins import projector
 import os
 import numpy as np
 import scipy.misc
+from tqdm import tqdm
 from utils import dataset
 
 def visualize_embeddings(logdir, target_tensors, sess, data,
@@ -73,11 +74,14 @@ def do_elementwise_eval(output_tensors, placeholders, inputs):
         output_tensors = [output_tensors]
     if not isinstance(inputs, list):
         inputs = [inputs]
+    if not isinstance(placeholders, list):
+        placeholders = [placeholders]
     n = inputs[0].shape[0]
     batch_size = 32
     all_outputs = [[] for tensor in output_tensors]
-    for batch_inputs in dataset.iterbatches(inputs, batch_size=batch_size,
-                                            shuffle=False):
+    for batch_inputs in tqdm(dataset.iterbatches(inputs,
+                                                 batch_size=batch_size,
+                                                 shuffle=False)):
         feed_dict = {}
         for i in range(len(inputs)):
             feed_dict[placeholders[i]] = batch_inputs[i]
@@ -87,6 +91,8 @@ def do_elementwise_eval(output_tensors, placeholders, inputs):
             all_outputs[i].append(output_value)
     for k in range(len(all_outputs)):
         all_outputs[k] = np.concatenate(all_outputs[k])
+    if len(all_outputs) == 1:
+        all_outputs = all_outputs[0]
     return all_outputs
 
 # Taken from https://github.com/tensorflow/tensorflow/issues/6322

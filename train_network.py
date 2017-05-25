@@ -3,14 +3,13 @@ import os
 import argparse
 import matplotlib.pyplot as plt
 import gym
-import gym_mnist
 import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
 from utils import dataset, tf_util as U
 from featurebasedmodellearner import FeatureBasedModelLearner
 from utils.visualize_embeddings import visualize_embeddings
-from utils.save_and_load import save_scope, load_scope, get_scope_vars
+from utils.save_and_load import save_scope, load_scope
 
 def increment_path(origpath):
     subscript = None

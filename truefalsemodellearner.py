@@ -1,8 +1,6 @@
-import gym
 import numpy as np
 import tensorflow as tf
 import random
-import os
 import matplotlib.pyplot as plt
 from modellearner import ModelLearner
 from utils import tf_util as U

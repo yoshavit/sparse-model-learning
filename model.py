@@ -2,46 +2,19 @@ import numpy as np
 import tensorflow as tf
 from utils import tf_util as U
 from utils.gruacell import GRUACell
-#-------# -----------------------------------------------
-# # A hacky solution for @yo-shavit to run OpenCV in conda without bugs
-# # Others should remove
-# import os
-# if os.environ['HOME'] == '/Users/yonadav':
-    # import sys;
-    # sys.path.append("/Users/yonadav/anaconda/lib/python3.5/site-packages")
-# #------------------------------------------------------
-# import cv2
-
-REPLAY_MEMORY_SIZE = 1000
-DEFAULT_STEPSIZE = 1e-4
-MSE_LOSS_SCALAR = 0.1
-GAMEPLAY_TIMOUT = 100 #moves
-
-"""
-Create a class that takes env as input
-Repeatedly acts in the environment, aggregates a set of transitions
-Constructs the complete pipeline
-Trains by drawing true samples, and creating random (statistically incorrect)
-ones.
-Then can take input, action, and yield lower-dimensional output state
-
-Quantities I need to know:
-    Image dimensions
-    Action-space dimension
-    Number of hidden layers for each variable
-"""
 
 class EnvModel:
     def __init__(self, ob_space, ac_space, feature_size, latent_size=128):
         """Creates a model-learner framework
         """
-        self.replay_memory = []
         self.ob_space = list(ob_space.shape)
         self.ac_space = ac_space.n
-        self.encoder_scope = self.transition_scope = self.featurer_scope = self.decoder_scope = None
+        self.encoder_scope = self.transition_scope = self.featurer_scope = None
         self.default_encoder = self.default_transition = self.default_featurer = None
         self.latent_size = latent_size
         self.feature_size = feature_size
+
+        # CURRENTLY NOT REALLY USED:
         self.input_state = tf.placeholder(tf.float32, name="input_state",
                                           shape=[None] + self.ob_space)
         self.input_action = tf.placeholder(tf.int32, name="input_action",
@@ -134,14 +107,13 @@ class EnvModel:
         summaries = []
         s0 = states[:, 0]
         x0 = self.build_encoder(s0)
-        if seq_length is None:
-            # TODO: assumes ob_space is 3 dimensional
-            self.states = tf.slice(states, [0,0,0,0,0],
-                                   tf.concat([-1, seq_length + 1, -1, -1, -1]))
-            self.actions = tf.slice(actions, [0,0],
-                                    tf.concat([-1, seq_length]))
-            self.features = tf.slice(features, [0,0,0],
-                                     tf.concat([-1, seq_length + 1, -1]))
+        if seq_length is not None:
+            states = tf.slice(states, [0,0,0,0,0],
+                                   tf.stack([-1, seq_length + 1, -1, -1, -1]))
+            actions = tf.slice(actions, [0,0],
+                                    tf.stack([-1, seq_length]))
+            features = tf.slice(features, [0,0,0],
+                                     tf.stack([-1, seq_length + 1, -1]))
         f_flattened = tf.reshape(features, [-1, self.feature_size])
         s_future = states[:, 1:]
         s_future_flattened = tf.reshape(s_future, [-1] + self.ob_space)
@@ -173,7 +145,7 @@ class EnvModel:
 
     # -------------- UTILITIES ---------------------------------------
 
-    def get_encoding(self, state):
+    def encode(self, state):
         if self.default_encoder is None:
             self.default_encoder = self.build_encoder(self.input_states[0])
         single_run = state.ndim == 3 # TODO: avoid specifically naming # dim
@@ -185,7 +157,7 @@ class EnvModel:
             latent_state = latent_state[0]
         return latent_state
 
-    def get_future_encoding(self, latent_state, action):
+    def advance_encoding(self, latent_state, action):
         single_run = latent_state.ndim == 1
         if self.default_transition is None:
             self.default_transition = self.build_transition(
@@ -201,7 +173,7 @@ class EnvModel:
             nx = tf.squeeze(nx, 0)
         return nx
 
-    def get_feature_from_encoding(self, latent_state):
+    def feature_from_encoding(self, latent_state):
         single_run = latent_state.ndim == 1
         if single_run:
             latent_state = np.expand_dims(latent_state, axis=0)

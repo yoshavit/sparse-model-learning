@@ -28,7 +28,7 @@ def increment_path(origpath):
 parser = argparse.ArgumentParser(description="Trains a model_learner on the MNIST game.")
 parser.add_argument('env', default="mnist-v0", help="Name of environment to be trained on. Examples: 'mnist-v0', 'blockwalker-v0', and 'blockwalker-multicolored-v0'")
 parser.add_argument('--log-dir', help="Path to log directory, relative to ./data/[env]")
-parser.add_argument('--run-id', help="Log suffix pointing to experiment to resume, e.g. if was run--05 arg should be 05", type=str)
+parser.add_argument('--run-id', help="Log suffix pointing to experiment to resume, e.g. if was run--05 arg should be run--05", type=str)
 parser.add_argument('--show-embeddings', help="Project model progress using labelled embeddings", action='store_true')
 parser.add_argument('--no-train', help="Do not update the parameters",
                     action="store_true")
@@ -52,11 +52,10 @@ feature_size = 1
 label_extractor = lambda info: [info]
 # ----------------------------------
 logdir = os.path.join('data', args.env, args.log_dir, 'train')
-logdir = os.path.join(logdir, "run")
 if args.run_id:
-    logdir += "--" + args.run_id
+    logdir += args.run_id
 else: # increment until we get a new id
-    logdir = increment_path(logdir)
+    logdir = increment_path(os.path.join(logdir, "run"))
 logger.info("Logging results to {}".format(logdir))
 sw = tf.summary.FileWriter(logdir)
 with tf.variable_scope("model"):

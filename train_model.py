@@ -69,11 +69,10 @@ with tf.variable_scope("model"):
 saver = tf.train.Saver()
 savepath = os.path.join(logdir, "model.ckpt")
 logger.info("Gathering initial gameplay data!")
-ml.gather_gameplay_data(500)
+ml.gather_gameplay_data(50)
 init_op = tf.global_variables_initializer()
 init_fn = lambda sess: sess.run(init_op)
 sv = tf.train.Supervisor(logdir=logdir,
-                         saver=None,
                          init_op=init_op,
                          init_fn=init_fn,
                          summary_op=None,
@@ -81,7 +80,7 @@ sv = tf.train.Supervisor(logdir=logdir,
                          global_step=ml.global_step,
                          save_model_secs=0,
                          save_summaries_secs=20)
-with tf.Session() as sess:
+with sv.managed_session() as sess:
     global_step = sess.run(ml.global_step)
     logger.info("Beginning training.")
     logger.info("To visualize, call:\ntensorboard --logdir={}".format(logdir))
@@ -89,7 +88,6 @@ with tf.Session() as sess:
                                     args.max_steps):
         transition_data = ml.create_transition_dataset(max_horizon,
                                                        label_extractor=label_extractor)
-        print(savepath, sv.save_path)
         for batch in dataset.iterbatches(transition_data,
                                          batch_size=args.batchsize,
                                          shuffle=True):
@@ -103,7 +101,7 @@ with tf.Session() as sess:
             ml.train_model(sess, *batch, show_embeddings=True)
             # By only saving during the embedding phase, our embedding isn't
             # overwritten by other saves
-            saver.save(sess, savepath)
+            saver.save(sess, savepath, global_step)
         global_step = sess.run(ml.global_step)
         ml.gather_gameplay_data(10)
 logger.info("Training complete!")

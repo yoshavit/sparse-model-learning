@@ -4,13 +4,14 @@ from utils import tf_util as U
 from utils.gruacell import GRUACell
 
 class EnvModel:
-    def __init__(self, ob_space, ac_space, feature_size, latent_size=128):
+    def __init__(self, ob_space, ac_space, feature_size, max_horizon=10, latent_size=128):
         """Creates a model-learner framework
         """
         self.ob_space = list(ob_space.shape)
         self.ac_space = ac_space.n
         self.encoder_scope = self.transition_scope = self.featurer_scope = None
         self.default_encoder = self.default_transition = self.default_featurer = None
+        self.max_horizon = max_horizon
         self.latent_size = latent_size
         self.feature_size = feature_size
 
@@ -47,7 +48,7 @@ class EnvModel:
                              weight_init=U.normc_initializer())
         return output
 
-    def build_transition(self, latent_state, actions):
+    def build_transition(self, latent_state, actions, seq_length=None):
         '''
         Args:
             latent_state - n x latent_size latent encoding of state
@@ -65,15 +66,18 @@ class EnvModel:
             reuse = False
         else:
             reuse = True
+
         with tf.variable_scope(self.transition_scope, reuse=reuse) as scope:
             self.transition_scope = scope
             actions = tf.one_hot(actions, self.ac_space, axis=-1)
             if lstm_model:
                 grua = GRUACell(self.latent_size, n_factors)
+                # gru = tf.contrib.rnn.GRUCell(self.latent_size)
                 self.state_init = x
                 next_states, _ = tf.nn.dynamic_rnn(grua,
                                                    actions,
-                                                   initial_state=self.state_init)
+                                                   initial_state=self.state_init,
+                                                   sequence_length=seq_length)
         return next_states
 
     def build_featurer(self, latent_state):
@@ -107,19 +111,34 @@ class EnvModel:
         summaries = []
         s0 = states[:, 0]
         x0 = self.build_encoder(s0)
-        if seq_length is not None:
-            states = tf.slice(states, [0,0,0,0,0],
-                                   tf.stack([-1, seq_length + 1, -1, -1, -1]))
-            actions = tf.slice(actions, [0,0],
-                                    tf.stack([-1, seq_length]))
-            features = tf.slice(features, [0,0,0],
-                                     tf.stack([-1, seq_length + 1, -1]))
+        # Create containers of size 0 for states, actions, features
+        # if seq_length is not None:
+            # states = tf.slice(states, [0,0,0,0,0],
+                                   # tf.stack([-1, seq_length + 1, -1, -1, -1]))
+            # actions = tf.slice(actions, [0,0],
+                                    # tf.stack([-1, seq_length]))
+            # features = tf.slice(features, [0,0,0],
+                                     # tf.stack([-1, seq_length + 1, -1]))
+        def pad_to_len(input, length):
+            # pad input's axis=1 to length with zeros
+            with tf.variable_scope("pad_to_maxlen"):
+                pad_shape = np.zeros([len(input.shape), 2])
+                pad_shape[1,1] = 1
+                pad_shape = tf.constant(pad_shape, dtype=tf.int32)*\
+                    (length - tf.shape(input)[1])
+            return tf.pad(input, pad_shape, "CONSTANT")
+        print("before: {}".format(states.shape))
+        states = pad_to_len(states, self.max_horizon + 1)
+        print("after: {}".format(states.shape))
+        actions = pad_to_len(actions, self.max_horizon)
+        features = pad_to_len(features, self.max_horizon + 1)
+
         f_flattened = tf.reshape(features, [-1, self.feature_size])
         s_future = states[:, 1:]
         s_future_flattened = tf.reshape(s_future, [-1] + self.ob_space)
         x_future_flattened = self.build_encoder(s_future_flattened)
         # x_future = tf.reshape(x_future_flattened, [-1, t, self.latent_size])
-        x_future_hat = self.build_transition(x0, actions)
+        x_future_hat = self.build_transition(x0, actions, seq_length)
         x_hat = tf.concat([tf.expand_dims(x0, axis=1), x_future_hat], axis=1)
         x_future_flattened_hat = tf.reshape(x_future_hat, [-1, self.latent_size])
         x_flattened_hat = tf.reshape(x_hat, [-1, self.latent_size])

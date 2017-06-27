@@ -7,9 +7,9 @@ _BIAS_VARIABLE_NAME = "bias"
 _WEIGHTS_VARIABLE_NAME = "kernel"
 
 class GRUACell(rnn.GRUCell):
-    def __init__(self, num_units, num_factors, input_size=None, activation=tanh,
+    def __init__(self, num_units, num_factors, activation=tanh,
                  reuse=None):
-        super(GRUACell, self).__init__(num_units, input_size, activation,
+        super(GRUACell, self).__init__(num_units, activation,
                                        reuse)
         self.num_factors = num_factors
 
@@ -17,13 +17,15 @@ class GRUACell(rnn.GRUCell):
         """Gated recurrent unit with Actions (GRUA) with nunits cells."""
         # =========================== MODIFIED ===========================
         # Using the Oh et al. 2015 model to combine actions and states
-        with vs.variable("factors"):
-            action_factors = _linear(inputs, self.num_factors, False,
-                                     self._bias_initializer,
-                                     self._kernel_initializer)
-            state_factors = _linear(state, self.num_factors, False,
-                                    self._bias_initializer,
-                                    self._kernel_initializer)
+        with vs.variable_scope("factors"):
+            with vs.variable_scope("action_factors"):
+                action_factors = _linear(inputs, self.num_factors, False,
+                                         self._bias_initializer,
+                                         self._kernel_initializer)
+            with vs.variable_scope("state_factors"):
+                state_factors = _linear(state, self.num_factors, False,
+                                        self._bias_initializer,
+                                        self._kernel_initializer)
             factors = action_factors*state_factors
         # ===============================================================
         with vs.variable_scope("gates"):  # Reset gate and update gate.

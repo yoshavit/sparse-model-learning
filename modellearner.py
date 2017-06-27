@@ -37,21 +37,24 @@ class ModelLearner:
         self.summary_writer=summary_writer
         with tf.variable_scope("envmodel"):
             self.envmodel = EnvModel(env.observation_space, env.action_space,
-                                     feature_size, latent_size)
+                                     feature_size, max_horizon, latent_size)
         self.global_step = tf.get_variable("global_step", [], tf.int32,
                                            initializer=tf.constant_initializer(0, dtype=tf.int32),
                                            trainable=False)
-        self.states = [tf.placeholder(tf.float32, shape=[None] +
-                                      list(env.observation_space.shape),
-                                      name="state%d"%i) for i in
-                       range(max_horizon + 1)]
-        self.actions = [tf.placeholder(tf.int32, shape=[None],
-                                       name="action%d"%i) for i in
-                        range(max_horizon)]
-        self.features = [tf.placeholder(tf.float32, shape=[None, feature_size],
-                                        name="feature%d"%i) for i in
-                         range(max_horizon + 1)]
-        self.seq_length = tf.placeholder(tf.int32, shape=[], name="seq_length")
+        state_shape = [None] + list(env.observation_space.shape)
+        self.states = [tf.placeholder_with_default(tf.zeros(state_shape, dtype=tf.float32),
+                                                   shape=state_shape, name="state%d"%i)
+                       for i in range(max_horizon + 1)]
+        action_shape = [None]
+        self.actions = [tf.placeholder_with_default(tf.zeros(action_shape, dtype=tf.int32),
+            shape=action_shape, name="action%d"%i) for i in range(max_horizon)]
+        feature_shape = [None, feature_size]
+        self.features = [tf.placeholder_with_default(tf.zeros(feature_shape,
+                                                              dtype=tf.float32),
+                                                     shape=feature_shape,
+                                                     name="feature%d"%i)
+                         for i in range(max_horizon + 1)]
+        self.seq_length = tf.placeholder(tf.int32, shape=[None], name="seq_length")
         inc_step = self.global_step.assign_add(tf.shape(self.states)[0])
         self.local_steps = 0
 
@@ -72,6 +75,7 @@ class ModelLearner:
         if self.can_project:
             with tf.variable_scope("embedding"):
                 self.num_embed_vectors = 256
+                print(latents)
                 latent_tensors = [tf.squeeze(tensor, axis=1)
                                   for tensor in tf.split(latents,
                                                          self.max_horizon+1,
@@ -80,6 +84,8 @@ class ModelLearner:
                                                      trainable=False,
                                                      name="latent%i"%i)
                                          for i in range(max_horizon + 1)]
+                print(self.latent_variables)
+                print(latent_tensors)
                 self.embeddings_op = [tf.assign(variable, tensor) for variable, tensor
                                       in zip(self.latent_variables, latent_tensors)]
                 self.config = projector.ProjectorConfig()
@@ -105,6 +111,7 @@ class ModelLearner:
             sess - [MUST SPECIFY] current tensorflow session
             show_embeddings - if true, create embeddings
         """
+        n = actions.shape[0]
         T = actions.shape[1]
         do_summary = self.local_steps%20 == 1
         if do_summary:
@@ -113,7 +120,7 @@ class ModelLearner:
             fetches = [self.train_op, self.global_step]
         if show_embeddings and self.can_project:
             fetches += [self.embeddings_op]
-        feed_dict = {self.seq_length: T,
+        feed_dict = {self.seq_length: [T]*n,
                      self.states[0]: states[:, 0],
                      self.features[0]: features[:, 0]}
         for t in range(T):
@@ -228,6 +235,10 @@ transition dataset!"
                                           for k in
                                           range(len(transition_seqs))]))
             output[i] = np.stack(output[i], axis=1)
+        counts = [0]*10
+        for i in range(len(output[-1])):
+            for j in range(len(output[-1][0])):
+                counts[output[-1][i][j][0]] += 1
         return output
 
 # TODO: feature_extractor specs are inconsistent - some take single val, others

@@ -6,6 +6,8 @@ from utils.gruacell import GRUACell
 class EnvModel:
     def __init__(self, ob_space, ac_space, feature_size, max_horizon=10, latent_size=128):
         """Creates a model-learner framework
+        max_horizon is the # of unrolled steps, with 0 unrolled steps meaning
+        max_horizon = 0
         """
         self.ob_space = list(ob_space.shape)
         self.ac_space = ac_space.n
@@ -97,20 +99,58 @@ class EnvModel:
     def loss(self, states, actions, features, seq_length=None, x_to_f_ratio=1):
         '''
         Estimates MSE prediction loss for features given states, actions, and a
-        true feature_extractor. REQUIRED: t >= 1
+        true feature_extractor. REQUIRED: T = self.max_horizon >= t > 0
+        Note that each vector should contain t (or t+1) elements, and the rest
+        should be zeros (up to self.max_horizon)
         Args:
-            states - n x (t+1) x [self.ob_space] tensor
-            actions - n x t tensor of action integers
-            features - n x (t+1) x self.feature_size tensor
-            seq_length - optional, tensor representing t
+            states - n x (T+1) x [self.ob_space] tensor (up to t+1 unzeroed)
+            actions - n x T tensor of action integers (up to t unzeroed)
+            features - n x (T+1) x self.feature_size tensor (up to t+1 unzeroed)
+            seq_length - optional, n x 1 tensor representing t's,
             x_to_f_ratio - (optional) a scalar weighting the latent vs feature
                 loss. result_loss = feature_loss + x_to_f_ratio*latent_loss
         Returns:
             loss - MSE error for feature prediction across time
         '''
         summaries = []
+        T = tf.shape(actions)[1]
         s0 = states[:, 0]
         x0 = self.build_encoder(s0)
+        f = features
+        seq_length = tf.squeeze(seq_length, axis=1)
+        if seq_length is None:
+            seq_length = tf.reduce_sum(tf.ones_like(actions), axis=1)
+
+
+        def zero_out(inp, startindex, totallength, axis=1):
+            # zero out the elements of input starting at start_index along axis
+            # startindex is equivalent to seq_length
+            with tf.variable_scope("zero_out"):
+                crange = tf.range(totallength, dtype=tf.int32)
+                for i in range(len(inp.shape)):
+                    # expand validrange's dimensions
+                    if i < axis:
+                        crange = tf.expand_dims(crange, 0)
+                    elif i == axis: # the axis itself is already expanded
+                        pass
+                    else: # i > axis
+                        crange = tf.expand_dims(crange, -1)
+                    # expand start_index's dimensions
+                    if i == 0:
+                        pass
+                    else:
+                        startindex = tf.expand_dims(startindex, -1)
+                input_shape = tf.shape(inp)
+                crange_tileshape = tf.concat([
+                    input_shape[:axis], [1], input_shape[axis+1:]], axis=0)
+                startindex_tileshape = tf.concat([[1], input_shape[1:]], axis=0)
+                crange_mesh = tf.tile(crange, crange_tileshape)
+                startindex_mesh = tf.tile(startindex, startindex_tileshape)
+                validmesh = tf.cast(tf.less(crange_mesh, startindex_mesh),
+                                    tf.float32)
+                output = tf.multiply(inp, validmesh)
+            return output
+
         # Create containers of size 0 for states, actions, features
         # if seq_length is not None:
             # states = tf.slice(states, [0,0,0,0,0],
@@ -119,35 +159,35 @@ class EnvModel:
                                     # tf.stack([-1, seq_length]))
             # features = tf.slice(features, [0,0,0],
                                      # tf.stack([-1, seq_length + 1, -1]))
-        def pad_to_len(input, length):
+
+        def pad_to_len(inp, length):
             # pad input's axis=1 to length with zeros
             with tf.variable_scope("pad_to_maxlen"):
                 pad_shape = np.zeros([len(input.shape), 2])
                 pad_shape[1,1] = 1
                 pad_shape = tf.constant(pad_shape, dtype=tf.int32)*\
-                    (length - tf.shape(input)[1])
-            return tf.pad(input, pad_shape, "CONSTANT")
-        print("before: {}".format(states.shape))
-        states = pad_to_len(states, self.max_horizon + 1)
-        print("after: {}".format(states.shape))
-        actions = pad_to_len(actions, self.max_horizon)
-        features = pad_to_len(features, self.max_horizon + 1)
+                    (length - tf.shape(inp)[1])
+            return tf.pad(inp, pad_shape, "CONSTANT")
 
-        f_flattened = tf.reshape(features, [-1, self.feature_size])
         s_future = states[:, 1:]
         s_future_flattened = tf.reshape(s_future, [-1] + self.ob_space)
         x_future_flattened = self.build_encoder(s_future_flattened)
+        # zero-out unnecessary elements from x_future_flattened
+        x_future = tf.reshape(x_future_flattened, [-1, T, self.latent_size])
         # x_future = tf.reshape(x_future_flattened, [-1, t, self.latent_size])
         x_future_hat = self.build_transition(x0, actions, seq_length)
         x_hat = tf.concat([tf.expand_dims(x0, axis=1), x_future_hat], axis=1)
-        x_future_flattened_hat = tf.reshape(x_future_hat, [-1, self.latent_size])
         x_flattened_hat = tf.reshape(x_hat, [-1, self.latent_size])
         f_flattened_hat = self.build_featurer(x_flattened_hat)
-        feature_loss = tf.reduce_mean(
-            tf.squared_difference(f_flattened, f_flattened_hat),
+        f_hat = tf.reshape(f_flattened_hat, [-1, T+1, self.feature_size])
+
+        feature_diff = zero_out(tf.squared_difference(f, f_hat), seq_length+1,
+                                self.max_horizon + 1)
+        feature_loss = tf.reduce_mean(feature_diff,
             name="feature_loss")
-        latent_loss = tf.reduce_mean(
-            tf.squared_difference(x_future_flattened, x_future_flattened_hat),
+        latent_diff = zero_out(tf.squared_difference(x_future, x_future_hat),
+                               seq_length, self.max_horizon)
+        latent_loss = tf.reduce_mean(latent_diff,
             name='latent_loss')
         total_loss = tf.identity(feature_loss + x_to_f_ratio*latent_loss,
                                  name="overall_loss")

@@ -42,7 +42,7 @@ parser.add_argument('--latent-size', type=int, default=32, help="Number of laten
 
 args = parser.parse_args()
 env = gym.make(args.env)
-max_horizon = 1
+max_horizon = 5
 # ------ Define features ------------
 # Feature will be true MNIST digit
 # Feature is extracted from info

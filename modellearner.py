@@ -41,20 +41,17 @@ class ModelLearner:
         self.global_step = tf.get_variable("global_step", [], tf.int32,
                                            initializer=tf.constant_initializer(0, dtype=tf.int32),
                                            trainable=False)
-        state_shape = [None] + list(env.observation_space.shape)
-        self.states = [tf.placeholder_with_default(tf.zeros(state_shape, dtype=tf.float32),
-                                                   shape=state_shape, name="state%d"%i)
+        self.states = [tf.placeholder(tf.float32, shape=[None] +
+                                      list(env.observation_space.shape),
+                                      name="state%d"%i)
                        for i in range(max_horizon + 1)]
-        action_shape = [None]
-        self.actions = [tf.placeholder_with_default(tf.zeros(action_shape, dtype=tf.int32),
-            shape=action_shape, name="action%d"%i) for i in range(max_horizon)]
-        feature_shape = [None, feature_size]
-        self.features = [tf.placeholder_with_default(tf.zeros(feature_shape,
-                                                              dtype=tf.float32),
-                                                     shape=feature_shape,
-                                                     name="feature%d"%i)
+        self.actions = [tf.placeholder(tf.int32, shape=[None],
+                                       name="action%d"%i)
+                        for i in range(max_horizon)]
+        self.features = [tf.placeholder(tf.float32, shape=[None, feature_size],
+                                        name="feature%d"%i)
                          for i in range(max_horizon + 1)]
-        self.seq_length = tf.placeholder(tf.int32, shape=[None], name="seq_length")
+        self.seq_length = tf.placeholder(tf.int32, shape=[None, 1], name="seq_length")
         inc_step = self.global_step.assign_add(tf.shape(self.states)[0])
         self.local_steps = 0
 
@@ -75,7 +72,6 @@ class ModelLearner:
         if self.can_project:
             with tf.variable_scope("embedding"):
                 self.num_embed_vectors = 256
-                print(latents)
                 latent_tensors = [tf.squeeze(tensor, axis=1)
                                   for tensor in tf.split(latents,
                                                          self.max_horizon+1,
@@ -84,8 +80,6 @@ class ModelLearner:
                                                      trainable=False,
                                                      name="latent%i"%i)
                                          for i in range(max_horizon + 1)]
-                print(self.latent_variables)
-                print(latent_tensors)
                 self.embeddings_op = [tf.assign(variable, tensor) for variable, tensor
                                       in zip(self.latent_variables, latent_tensors)]
                 self.config = projector.ProjectorConfig()
@@ -100,18 +94,18 @@ class ModelLearner:
                                                            'embed_labels%d.tsv'%i)
         self.summary_op = tf.summary.merge_all()
 
-    def train_model(self, sess, states, actions, features, labels=None,
+    def train_model(self, sess, states, actions, features, seq_lengths, labels=None,
                    show_embeddings=False):
         """
         Args:
-            states - array of shape batch_size x t+1 x [state_shape]
-            actions - array of shape batch_size x t x 1
-            features - array batch_size x t+1 x self.feature_size
-            labels - (optional) array of batch_size x t+1 x 1
+            states - array of shape batch_size x T+1 x [state_shape]
+            actions - array of shape batch_size x T x 1
+            features - array batch_size x T+1 x feature_size
+            seq_lengths - array batch_size x 1
+            labels - (optional) array of batch_size x T+1 x 1
             sess - [MUST SPECIFY] current tensorflow session
             show_embeddings - if true, create embeddings
         """
-        n = actions.shape[0]
         T = actions.shape[1]
         do_summary = self.local_steps%20 == 1
         if do_summary:
@@ -120,7 +114,7 @@ class ModelLearner:
             fetches = [self.train_op, self.global_step]
         if show_embeddings and self.can_project:
             fetches += [self.embeddings_op]
-        feed_dict = {self.seq_length: [T]*n,
+        feed_dict = {self.seq_length: seq_lengths,
                      self.states[0]: states[:, 0],
                      self.features[0]: features[:, 0]}
         for t in range(T):
@@ -186,13 +180,13 @@ class ModelLearner:
         if len(self.replay_memory) > REPLAY_MEMORY_SIZE:
             self.replay_memory = self.replay_memory[-REPLAY_MEMORY_SIZE:]
 
-    def create_transition_dataset(self, steps, n=None, feature_from_info=True,
-                                 label_extractor=None):
+    def create_transition_dataset(self, max_steps, n=None, feature_from_info=True,
+                                 label_extractor=None, variable_steps=True):
         """Constructs a list of model input matrices representing the
         components of the transitions. No guarantee of ordering or lack thereof ordering.
 
         Args:
-            steps - number of forward transition steps
+            max_steps - number of forward transition steps
             n - number of transitions to generate (if None use all transitions
                 from games)
             feature_from_info - boolean, if true self.feature_extractor takes
@@ -204,26 +198,38 @@ class ModelLearner:
         assert self.replay_memory, "Must gather_gameplay_data before creating\
 transition dataset!"
         transition_seqs = []
+        candidate_steps = list(range(1, max_steps+1)) if variable_steps else [max_steps]
         for game in self.replay_memory:
-            for i in range(len(game) - steps + 1):
-                transitions = game[i:i+steps]
-                states = [transitions[j][0] for j in range(steps)] +\
-                    [transitions[-1][2]]
-                actions = [transitions[j][1] for j in range(steps)]
-                if feature_from_info:
-                    features = [self.feature_extractor(
-                        transitions[j][5]['state']) for j in range(steps)] +\
-                        [self.feature_extractor(transitions[-1][5]['next_state'])]
-                else:
-                    features = [self.feature_extractor(s) for s in states]
-                if label_extractor:
-                    labels = [label_extractor(
-                        transitions[j][5]['state']) for j in range(steps)] +\
-                        [label_extractor(transitions[-1][5]['next_state'])]
-                transition_seq = [states, actions, features]
-                if label_extractor:
-                    transition_seq.append(labels)
-                transition_seqs.append(transition_seq)
+            for n_steps in candidate_steps:
+                for i in range(len(game) - n_steps + 1):
+                    transitions = game[i:i+n_steps]
+                    # compile states, then pad with zeros
+                    states = [transitions[j][0] for j in range(n_steps)] +\
+                            [transitions[-1][2]] +\
+                            [np.zeros_like(transitions[0][0])
+                             for j in range(max_steps - n_steps)]
+                    actions = [transitions[j][1] for j in range(n_steps)] +\
+                            [np.zeros_like(transitions[0][1])
+                             for j in range(max_steps - n_steps)]
+                    if feature_from_info:
+                        features = [self.feature_extractor(transitions[j][5]['state'])
+                                    for j in range(n_steps)] +\
+                                [self.feature_extractor(transitions[-1][5]['next_state'])]
+                    else:
+                        features = [self.feature_extractor(s) for s in states]
+                    features += [np.zeros_like(features[0])
+                                 for j in range(max_steps - n_steps)]
+                    if label_extractor:
+                        labels = [label_extractor(
+                            transitions[j][5]['state']) for j in range(n_steps)] +\
+                            [label_extractor(transitions[-1][5]['next_state'])]
+                        labels += [np.zeros_like(labels[0]) for j in
+                                   range(max_steps - n_steps)]
+                    seq_length = [n_steps]
+                    transition_seq = [states, actions, features, seq_length]
+                    if label_extractor:
+                        transition_seq.append(labels)
+                    transition_seqs.append(transition_seq)
         if n and n < len(transition_seqs):
             transition_seqs = random.sample(transition_seqs, n)
         # convert to list of arrays
@@ -235,10 +241,10 @@ transition dataset!"
                                           for k in
                                           range(len(transition_seqs))]))
             output[i] = np.stack(output[i], axis=1)
-        counts = [0]*10
-        for i in range(len(output[-1])):
-            for j in range(len(output[-1][0])):
-                counts[output[-1][i][j][0]] += 1
+        # counts = [0]*10
+        # for i in range(len(output[-1])):
+            # for j in range(len(output[-1][0])):
+                # counts[output[-1][i][j][0]] += 1
         return output
 
 # TODO: feature_extractor specs are inconsistent - some take single val, others

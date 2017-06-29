@@ -160,14 +160,14 @@ class EnvModel:
             # features = tf.slice(features, [0,0,0],
                                      # tf.stack([-1, seq_length + 1, -1]))
 
-        def pad_to_len(inp, length):
-            # pad input's axis=1 to length with zeros
-            with tf.variable_scope("pad_to_maxlen"):
-                pad_shape = np.zeros([len(input.shape), 2])
-                pad_shape[1,1] = 1
-                pad_shape = tf.constant(pad_shape, dtype=tf.int32)*\
-                    (length - tf.shape(inp)[1])
-            return tf.pad(inp, pad_shape, "CONSTANT")
+        # def pad_to_len(inp, length):
+            # # pad input's axis=1 to length with zeros
+            # with tf.variable_scope("pad_to_maxlen"):
+                # pad_shape = np.zeros([len(input.shape), 2])
+                # pad_shape[1,1] = 1
+                # pad_shape = tf.constant(pad_shape, dtype=tf.int32)*\
+                    # (length - tf.shape(inp)[1])
+            # return tf.pad(inp, pad_shape, "CONSTANT")
 
         s_future = states[:, 1:]
         s_future_flattened = tf.reshape(s_future, [-1] + self.ob_space)

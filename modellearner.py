@@ -38,9 +38,10 @@ class ModelLearner:
         with tf.variable_scope("envmodel"):
             self.envmodel = EnvModel(env.observation_space, env.action_space,
                                      feature_size, max_horizon, latent_size)
-        self.global_step = tf.get_variable("global_step", [], tf.int32,
-                                           initializer=tf.constant_initializer(0, dtype=tf.int32),
-                                           trainable=False)
+        self.global_step = tf.get_variable(
+            "global_step", [], tf.int32,
+            initializer=tf.constant_initializer(0, dtype=tf.int32),
+            trainable=False)
         self.states = [tf.placeholder(tf.float32, shape=[None] +
                                       list(env.observation_space.shape),
                                       name="state%d"%i)

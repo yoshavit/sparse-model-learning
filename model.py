@@ -121,7 +121,6 @@ class EnvModel:
         if seq_length is None:
             seq_length = tf.reduce_sum(tf.ones_like(actions), axis=1)
 
-
         def zero_out(inp, startindex, totallength, axis=1):
             # zero out the elements of input starting at start_index along axis
             # startindex is equivalent to seq_length
@@ -150,24 +149,6 @@ class EnvModel:
                                     tf.float32)
                 output = tf.multiply(inp, validmesh)
             return output
-
-        # Create containers of size 0 for states, actions, features
-        # if seq_length is not None:
-            # states = tf.slice(states, [0,0,0,0,0],
-                                   # tf.stack([-1, seq_length + 1, -1, -1, -1]))
-            # actions = tf.slice(actions, [0,0],
-                                    # tf.stack([-1, seq_length]))
-            # features = tf.slice(features, [0,0,0],
-                                     # tf.stack([-1, seq_length + 1, -1]))
-
-        # def pad_to_len(inp, length):
-            # # pad input's axis=1 to length with zeros
-            # with tf.variable_scope("pad_to_maxlen"):
-                # pad_shape = np.zeros([len(input.shape), 2])
-                # pad_shape[1,1] = 1
-                # pad_shape = tf.constant(pad_shape, dtype=tf.int32)*\
-                    # (length - tf.shape(inp)[1])
-            # return tf.pad(inp, pad_shape, "CONSTANT")
 
         s_future = states[:, 1:]
         s_future_flattened = tf.reshape(s_future, [-1] + self.ob_space)
@@ -199,8 +180,41 @@ class EnvModel:
             tf.summary.image('input', s0),
         ])
 
+        #timestep summaries
+        with tf.variable_scope("timestep_breakdown"):
+            # feature loss in each timestep, averaged over each nonzero feature
+            feature_losses = [
+                tf.div(
+                    tf.reduce_sum(tf.squeeze(t, axis=1), axis=0),
+                    tf.count_nonzero(tf.squeeze(t, axis=1), axis=0,
+                                     dtype=tf.float32) + 1e-12, # to avoid dividing by 0
+                    name="feature_loss%i"%i)
+                for t,i in zip(
+                    tf.split(tf.reduce_mean(feature_diff, axis=2),
+                             self.max_horizon+1, axis=1),
+                    range(self.max_horizon+1))]
+            # same, but latent state loss
+            latent_losses = [
+                tf.div(
+                    tf.reduce_sum(tf.squeeze(t, axis=1), axis=0),
+                    tf.count_nonzero(tf.squeeze(t, axis=1), axis=0,
+                                     dtype=tf.float32) + 1e-12,
+                    name="latents_loss%i"%i)
+                for t,i in zip(
+                    tf.split(tf.reduce_mean(latent_diff, axis=2),
+                             self.max_horizon, axis=1),
+                    range(self.max_horizon))]
+
+            timestep_summaries = []
+            for loss in feature_losses + latent_losses:
+                loss_name = "timestep_" + loss.name[-15:]
+                timestep_summaries.extend([
+                    tf.summary.scalar(loss_name, loss),
+                    tf.summary.histogram(loss_name, loss)
+                ])
         var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, tf.get_variable_scope().name)
-        return total_loss, x_hat, var_list, tf.summary.merge(summaries)
+        return total_loss, x_hat, var_list, tf.summary.merge(summaries),\
+                tf.summary.merge(timestep_summaries)
 
     # -------------- UTILITIES ---------------------------------------
 

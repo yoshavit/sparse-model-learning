@@ -57,7 +57,7 @@ class ModelLearner:
         self.local_steps = 0
 
         with tf.variable_scope("train"):
-            self.loss, latents, var_list, summary = self.envmodel.loss(
+            self.loss, latents, var_list, base_summary, timestep_summary = self.envmodel.loss(
                 tf.stack(self.states, axis=1),
                 tf.stack(self.actions, axis=1),
                 tf.stack(self.features, axis=1),
@@ -93,7 +93,7 @@ class ModelLearner:
                                                                'embed_sprite%d.png'%i)
                     embedding.metadata_path = os.path.join(logdir,
                                                            'embed_labels%d.tsv'%i)
-        self.summary_op = tf.summary.merge_all()
+        self.summary_op = tf.summary.merge([base_summary, timestep_summary])
 
     def train_model(self, sess, states, actions, features, seq_lengths, labels=None,
                    show_embeddings=False):

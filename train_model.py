@@ -29,7 +29,7 @@ parser = argparse.ArgumentParser(description="Trains a model_learner on the MNIS
 parser.add_argument('env', default="mnist-v0", help="Name of environment to"
                     "be trained on. Examples: 'mnist-v0', 'blockwalker-v0',"
                     "and 'blockwalker-multicolored-v0'")
-parser.add_argument('--log-dir', help="Path to log directory, relative to ./data/[env]")
+parser.add_argument('--logdir', help="Path to log directory, relative to ./data/[env]")
 parser.add_argument('--run-id', help="Log suffix pointing to experiment to"
                     "resume, e.g. if was run--05 arg should be run--05",
                     type=str)
@@ -44,25 +44,30 @@ parser.add_argument('-batchsize', help="Batch size for learning", type=int,
                     default=16)
 parser.add_argument('--maxhorizon', help="Max number of steps to simulate"
                     "forward (1 means 1 transition)", type=int, default=5)
-parser.add_argument('--max-steps', type=int, default=10000000, help="Number of"
+parser.add_argument('--maxsteps', type=int, default=10000000, help="Number of"
                     "steps to train (if 0, trains until manually halted)")
 parser.add_argument('-stepsize', type=float, default=1e-4,
                     help="train step size")
-parser.add_argument('--latent-size', type=int, default=32,
+parser.add_argument('--latentsize', type=int, default=32,
                     help="Number of latent dimensions used to encode the state")
 
 args = parser.parse_args()
 env = gym.make(args.env)
 max_horizon = args.maxhorizon
-# ------ Define features ------------
+# ------ MNIST features ------------
 # Feature will be true MNIST digit
 # Feature is extracted from info
-feature_extractor = lambda info: [info]
-feature_size = 1
+# feature_extractor = lambda info: [info%5]
+# feature_size = 1
 # Label is separate from info
-label_extractor = lambda info: [info]
+# label_extractor = lambda info: [info]
+# ------- 9-game features---------------
+feature_extractor = lambda info: info.flatten()
+feature_size = 9
+label_extractor = None
 # ----------------------------------
-logdir = os.path.join('data', args.env, args.log_dir, 'train')
+has_labels = bool(label_extractor)
+logdir = os.path.join('data', args.env, args.logdir, 'train')
 if args.run_id:
     logdir = os.path.join(logdir, args.run_id)
 else: # increment until we get a new id
@@ -70,16 +75,17 @@ else: # increment until we get a new id
 logger.info("Logging results to {}".format(logdir))
 sw = tf.summary.FileWriter(logdir)
 ml = ModelLearner(env, feature_size, args.stepsize,
-                  latent_size=args.latent_size,
+                  latent_size=args.latentsize,
                   max_horizon=max_horizon,
                   summary_writer=sw,
+                  has_labels=has_labels,
                   force_latent_consistency=(not
                                             args.ignore_latent_consistency),
                   feature_extractor=feature_extractor)
 saver = tf.train.Saver()
 savepath = os.path.join(logdir, "model.ckpt")
 logger.info("Gathering initial gameplay data!")
-ml.gather_gameplay_data(50)
+ml.gather_gameplay_data(200)
 restoring_saver = tf.train.Saver(var_list=[var for var in tf.global_variables()
                                            if var.name[:9] != "embedding"])
 local_init_op = tf.global_variables_initializer()
@@ -96,9 +102,10 @@ with sv.managed_session() as sess:
     global_step = sess.run(ml.global_step)
     logger.info("Beginning training.")
     logger.info("To visualize, call:\ntensorboard --logdir={}".format(logdir))
-    while not sv.should_stop() and ((not args.max_steps) or global_step <
-                                    args.max_steps):
+    while not sv.should_stop() and ((not args.maxsteps) or global_step <
+                                    args.maxsteps):
         transition_data = ml.create_transition_dataset(max_horizon,
+                                                       n=20000,
                                                        label_extractor=label_extractor)
         for batch in dataset.iterbatches(transition_data,
                                          batch_size=args.batchsize,

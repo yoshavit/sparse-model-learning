@@ -181,7 +181,7 @@ class EnvModel:
         ])
 
         #timestep summaries
-        with tf.variable_scope("timestep_breakdown"):
+        with tf.variable_scope("timestep"):
             # feature loss in each timestep, averaged over each nonzero feature
             feature_losses = [
                 tf.div(
@@ -199,7 +199,7 @@ class EnvModel:
                     tf.reduce_sum(tf.squeeze(t, axis=1), axis=0),
                     tf.count_nonzero(tf.squeeze(t, axis=1), axis=0,
                                      dtype=tf.float32) + 1e-12,
-                    name="latents_loss%i"%i)
+                    name="latents_loss%i"%(i+1))
                 for t,i in zip(
                     tf.split(tf.reduce_mean(latent_diff, axis=2),
                              self.max_horizon, axis=1),
@@ -207,7 +207,7 @@ class EnvModel:
 
             timestep_summaries = []
             for loss in feature_losses + latent_losses:
-                loss_name = "timestep_" + loss.name[-15:]
+                loss_name = loss.name[-15:]
                 timestep_summaries.extend([
                     tf.summary.scalar(loss_name, loss),
                     tf.summary.histogram(loss_name, loss)

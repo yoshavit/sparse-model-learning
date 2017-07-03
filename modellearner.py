@@ -10,8 +10,6 @@ import os
 REPLAY_MEMORY_SIZE = 1000
 DEFAULT_STEPSIZE = 1e-4
 
-"""
-"""
 
 class ModelLearner:
     def __init__(self, env, feature_size,
@@ -19,7 +17,7 @@ class ModelLearner:
                  latent_size=10,
                  max_horizon=3,
                  summary_writer=None,
-                 can_project=True,
+                 has_labels=False,
                  force_latent_consistency=True,
                  feature_extractor=None):
         """Creates a model-learner framework
@@ -69,28 +67,27 @@ class ModelLearner:
             self.train_op = tf.group(
                 tf.train.AdamOptimizer(stepsize).apply_gradients(grads_and_vars),
                 inc_step)
-        self.can_project = can_project
-        if self.can_project:
-            with tf.variable_scope("embedding"):
-                self.num_embed_vectors = 256
-                latent_tensors = [tf.squeeze(tensor, axis=1)
-                                  for tensor in tf.split(latents,
-                                                         self.max_horizon+1,
-                                                         axis=1)]
-                self.latent_variables = [tf.Variable(tf.zeros([self.num_embed_vectors, latent_size]),
-                                                     trainable=False,
-                                                     name="latent%i"%i)
-                                         for i in range(max_horizon + 1)]
-                self.embeddings_op = [tf.assign(variable, tensor) for variable, tensor
-                                      in zip(self.latent_variables, latent_tensors)]
-                self.config = projector.ProjectorConfig()
-                logdir = self.summary_writer.get_logdir()
-                for i in range(max_horizon + 1):
-                    latent = self.latent_variables[i]
-                    embedding = self.config.embeddings.add()
-                    embedding.tensor_name = latent.name
-                    embedding.sprite.image_path = os.path.join(logdir,
-                                                               'embed_sprite%d.png'%i)
+        with tf.variable_scope("embedding"):
+            self.num_embed_vectors = 256
+            latent_tensors = [tf.squeeze(tensor, axis=1)
+                              for tensor in tf.split(latents,
+                                                     self.max_horizon+1,
+                                                     axis=1)]
+            self.latent_variables = [tf.Variable(
+                tf.zeros([self.num_embed_vectors, latent_size]),
+                trainable=False, name="latent%i"%i)
+                for i in range(max_horizon + 1)]
+            self.embeddings_op = [tf.assign(variable, tensor) for variable, tensor
+                                  in zip(self.latent_variables, latent_tensors)]
+            self.config = projector.ProjectorConfig()
+            logdir = self.summary_writer.get_logdir()
+            for i in range(max_horizon + 1):
+                latent = self.latent_variables[i]
+                embedding = self.config.embeddings.add()
+                embedding.tensor_name = latent.name
+                embedding.sprite.image_path = os.path.join(logdir,
+                                                           'embed_sprite%d.png'%i)
+                if has_labels:
                     embedding.metadata_path = os.path.join(logdir,
                                                            'embed_labels%d.tsv'%i)
         self.summary_op = tf.summary.merge([base_summary, timestep_summary])
@@ -113,7 +110,7 @@ class ModelLearner:
             fetches = [self.train_op, self.global_step, self.summary_op]
         else:
             fetches = [self.train_op, self.global_step]
-        if show_embeddings and self.can_project:
+        if show_embeddings:
             fetches += [self.embeddings_op]
         feed_dict = {self.seq_length: seq_lengths,
                      self.states[0]: states[:, 0],
@@ -128,9 +125,6 @@ class ModelLearner:
             self.summary_writer.add_summary(fetched[2], fetched[1])
             self.summary_writer.flush()
         if show_embeddings:
-            if labels is None:
-                labels = features
-            assert labels.shape[2] == 1 # also must be ints
             assert states.shape[0] == self.num_embed_vectors, "batch_size when embedding vectors must be modellearner.num_embed_vectors, because embedding variable size must be prespecified"
             for i in range(self.max_horizon + 1):
                 embedding = self.config.embeddings[i]
@@ -145,12 +139,13 @@ class ModelLearner:
                     sprite = sprite[:,:,0]
                 scipy.misc.imsave(embedding.sprite.image_path, sprite)
                 # labels
-                label_data = labels[:, i]
-                metadata_file = open(embedding.metadata_path, 'w')
-                metadata_file.write('Name\tClass\n')
-                for ll in range(label_data.shape[0]):
-                    metadata_file.write('%06d\t%d\n' % (ll, label_data[ll]))
-                metadata_file.close()
+                if labels is not None:
+                    label_data = labels[:, i]
+                    metadata_file = open(embedding.metadata_path, 'w')
+                    metadata_file.write('Name\tClass\n')
+                    for ll in range(label_data.shape[0]):
+                        metadata_file.write('%06d\t%d\n' % (ll, label_data[ll]))
+                    metadata_file.close()
             projector.visualize_embeddings(self.summary_writer, self.config)
 
 # ------------- UTILITIES ------------------------------

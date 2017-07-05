@@ -58,14 +58,14 @@ transition_stacked_dim = 3
 # ------ MNIST features ------------
 # Feature will be true MNIST digit
 # Feature is extracted from info
-feature_extractor = lambda info: [info%5]
-feature_size = 1
-# Label is separate from info
-label_extractor = lambda info: [info]
+# feature_extractor = lambda info: [info%5]
+# feature_size = 1
+# # Label is separate from info
+# label_extractor = lambda info: [info]
 # ------- 9-game features---------------
-# feature_extractor = lambda info: info.flatten()
-# feature_size = 9
-# label_extractor = None
+feature_extractor = lambda info: info.flatten()
+feature_size = 4
+label_extractor = None
 # ----------------------------------
 has_labels = bool(label_extractor)
 logdir = os.path.join('data', args.env, args.logdir, 'train')

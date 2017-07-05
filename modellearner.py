@@ -73,7 +73,7 @@ class ModelLearner:
                 tf.train.AdamOptimizer(stepsize).apply_gradients(grads_and_vars),
                 inc_step)
         with tf.variable_scope("embedding"):
-            self.num_embed_vectors = 256
+            self.num_embed_vectors = 512
             latent_tensors = [tf.squeeze(tensor, axis=1)
                               for tensor in tf.split(latents,
                                                      self.max_horizon+1,

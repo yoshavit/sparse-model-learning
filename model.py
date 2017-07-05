@@ -47,7 +47,7 @@ class EnvModel:
                                  x.shape.as_list()))
             x = tf.reshape(x, new_shape)
             for i in range(3):
-                x = tf.nn.elu(U.conv2d(x, 32, "conv%d"%i, filter_size=(3,3),
+                x = tf.nn.elu(U.conv2d(x, 32, "conv%d"%i, filter_size=(5,5),
                                        stride=(2,2)))
             x = U.flattenallbut0(x)
             # x = tf.nn.relu(U.dense(x, 256, "dense1",

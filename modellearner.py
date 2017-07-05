@@ -16,6 +16,7 @@ class ModelLearner:
                  stepsize=DEFAULT_STEPSIZE,
                  latent_size=10,
                  max_horizon=3,
+                 transition_stacked_dim=1,
                  summary_writer=None,
                  has_labels=False,
                  force_latent_consistency=True,
@@ -34,8 +35,12 @@ class ModelLearner:
         self.max_horizon = max_horizon
         self.summary_writer=summary_writer
         with tf.variable_scope("envmodel"):
-            self.envmodel = EnvModel(env.observation_space, env.action_space,
-                                     feature_size, max_horizon, latent_size)
+            self.envmodel = EnvModel(env.observation_space,
+                                     env.action_space,
+                                     feature_size,
+                                     max_horizon=max_horizon,
+                                     latent_size=latent_size,
+                                     transition_stacked_dim=transition_stacked_dim)
         self.global_step = tf.get_variable(
             "global_step", [], tf.int32,
             initializer=tf.constant_initializer(0, dtype=tf.int32),

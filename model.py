@@ -2,12 +2,16 @@ import numpy as np
 import tensorflow as tf
 from utils import tf_util as U
 from utils.gruacell import GRUACell
+from utils.multirnncell import ExposedMultiRNNCell
 
 class EnvModel:
-    def __init__(self, ob_space, ac_space, feature_size, max_horizon=10, latent_size=128):
+    def __init__(self, ob_space, ac_space, feature_size, max_horizon=10,
+                 latent_size=128, transition_stacked_dim=1):
         """Creates a model-learner framework
         max_horizon is the # of unrolled steps, with 0 unrolled steps meaning
         max_horizon = 0
+        transition_stacked_dim is the number of stacked cells for each timestep
+        in the transition model
         """
         self.ob_space = list(ob_space.shape)
         self.ac_space = ac_space.n
@@ -16,6 +20,8 @@ class EnvModel:
         self.max_horizon = max_horizon
         self.latent_size = latent_size
         self.feature_size = feature_size
+        self.transition_stacked_dim = transition_stacked_dim
+        assert latent_size%transition_stacked_dim == 0, "latent_size must divide evenly into transition_stacked_dim components, but was {}, {}".format(latent_size, transition_stacked_dim)
 
         # CURRENTLY NOT REALLY USED:
         self.input_state = tf.placeholder(tf.float32, name="input_state",
@@ -60,8 +66,7 @@ class EnvModel:
             next_states - an approximation of the latent encoding of the state
                 for each future timestep given the application of the actions
         '''
-        n_factors = 512
-        lstm_model = True
+        # n_factors = 512
         x = latent_state
         if not self.transition_scope:
             self.transition_scope = "transition"
@@ -72,14 +77,22 @@ class EnvModel:
         with tf.variable_scope(self.transition_scope, reuse=reuse) as scope:
             self.transition_scope = scope
             actions = tf.one_hot(actions, self.ac_space, axis=-1)
-            if lstm_model:
-                grua = GRUACell(self.latent_size, n_factors)
-                # gru = tf.contrib.rnn.GRUCell(self.latent_size)
-                self.state_init = x
-                next_states, _ = tf.nn.dynamic_rnn(grua,
-                                                   actions,
-                                                   initial_state=self.state_init,
-                                                   sequence_length=seq_length)
+            # def cell():
+                # return GRUACell(
+                # self.latent_size//self.transition_stacked_dim, n_factors)
+            def cell():
+                return tf.contrib.rnn.GRUBlockCell(
+                    self.latent_size//self.transition_stacked_dim)
+            # note that we use a special version of MultiRNNCell
+            # to expose the entire RNN's internal state at each timestep
+            stacked_cell = ExposedMultiRNNCell(
+                [cell() for _ in range(self.transition_stacked_dim)])
+            initial_state = tuple(tf.split(x, self.transition_stacked_dim,
+                                     axis=1))
+            next_states, _ = tf.nn.dynamic_rnn(stacked_cell,
+                                               actions,
+                                               initial_state=initial_state,
+                                               sequence_length=seq_length)
         return next_states
 
     def build_featurer(self, latent_state):
@@ -189,10 +202,9 @@ class EnvModel:
                     tf.count_nonzero(tf.squeeze(t, axis=1), axis=0,
                                      dtype=tf.float32) + 1e-12, # to avoid dividing by 0
                     name="feature_loss%i"%i)
-                for t,i in zip(
+                for i, t in enumerate(
                     tf.split(tf.reduce_mean(feature_diff, axis=2),
-                             self.max_horizon+1, axis=1),
-                    range(self.max_horizon+1))]
+                             self.max_horizon+1, axis=1))]
             # same, but latent state loss
             latent_losses = [
                 tf.div(
@@ -200,10 +212,9 @@ class EnvModel:
                     tf.count_nonzero(tf.squeeze(t, axis=1), axis=0,
                                      dtype=tf.float32) + 1e-12,
                     name="latents_loss%i"%(i+1))
-                for t,i in zip(
+                for i, t in enumerate(
                     tf.split(tf.reduce_mean(latent_diff, axis=2),
-                             self.max_horizon, axis=1),
-                    range(self.max_horizon))]
+                             self.max_horizon, axis=1))]
 
             timestep_summaries = []
             for loss in feature_losses + latent_losses:

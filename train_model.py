@@ -48,23 +48,24 @@ parser.add_argument('--maxsteps', type=int, default=10000000, help="Number of"
                     "steps to train (if 0, trains until manually halted)")
 parser.add_argument('-stepsize', type=float, default=1e-4,
                     help="train step size")
-parser.add_argument('--latentsize', type=int, default=32,
+parser.add_argument('--latentsize', type=int, default=64,
                     help="Number of latent dimensions used to encode the state")
 
 args = parser.parse_args()
 env = gym.make(args.env)
 max_horizon = args.maxhorizon
+transition_stacked_dim = 3
 # ------ MNIST features ------------
 # Feature will be true MNIST digit
 # Feature is extracted from info
-# feature_extractor = lambda info: [info%5]
-# feature_size = 1
+feature_extractor = lambda info: [info%5]
+feature_size = 1
 # Label is separate from info
-# label_extractor = lambda info: [info]
+label_extractor = lambda info: [info]
 # ------- 9-game features---------------
-feature_extractor = lambda info: info.flatten()
-feature_size = 9
-label_extractor = None
+# feature_extractor = lambda info: info.flatten()
+# feature_size = 9
+# label_extractor = None
 # ----------------------------------
 has_labels = bool(label_extractor)
 logdir = os.path.join('data', args.env, args.logdir, 'train')
@@ -81,7 +82,8 @@ ml = ModelLearner(env, feature_size, args.stepsize,
                   has_labels=has_labels,
                   force_latent_consistency=(not
                                             args.ignore_latent_consistency),
-                  feature_extractor=feature_extractor)
+                  feature_extractor=feature_extractor,
+                  transition_stacked_dim=transition_stacked_dim)
 saver = tf.train.Saver()
 savepath = os.path.join(logdir, "model.ckpt")
 logger.info("Gathering initial gameplay data!")

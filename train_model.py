@@ -59,13 +59,15 @@ transition_stacked_dim = 3
 # Feature will be true MNIST digit
 # Feature is extracted from info
 # feature_extractor = lambda info: [info%5]
-# feature_size = 1
+# feature_shape = [1]
 # # Label is separate from info
 # label_extractor = lambda info: [info]
 # ------- 9-game features---------------
-feature_extractor = lambda info: info.flatten()[:6]
-feature_size = 6
+feature_extractor = lambda info: info
+feature_shape = [3, 3, 9]
 label_extractor = lambda info: info[2][0]
+feature_regression = False
+feature_softmax = True
 # ----------------------------------
 has_labels = bool(label_extractor)
 logdir = os.path.join('data', args.env, args.logdir, 'train')
@@ -75,35 +77,39 @@ else: # increment until we get a new id
     logdir = increment_path(os.path.join(logdir, "run"))
 logger.info("Logging results to {}".format(logdir))
 sw = tf.summary.FileWriter(logdir)
-ml = ModelLearner(env, feature_size, args.stepsize,
+ml = ModelLearner(env, feature_shape, args.stepsize,
                   latent_size=args.latentsize,
                   max_horizon=max_horizon,
                   summary_writer=sw,
                   has_labels=has_labels,
                   force_latent_consistency=(not
                                             args.ignore_latent_consistency),
+                  feature_softmax=feature_softmax,
+                  feature_regression=feature_regression,
                   feature_extractor=feature_extractor,
                   transition_stacked_dim=transition_stacked_dim)
 saver = tf.train.Saver()
 savepath = os.path.join(logdir, "model.ckpt")
 logger.info("Gathering initial gameplay data!")
-ml.gather_gameplay_data(200)
+ml.gather_gameplay_data(10)
 restoring_saver = tf.train.Saver(var_list=[var for var in tf.global_variables()
                                            if var.name[:9] != "embedding"])
 local_init_op = tf.global_variables_initializer()
 restore_path = tf.train.latest_checkpoint(logdir)
 with tf.Session() as sess:
-    sess.run(local_init_op)
     if restore_path is not None:
-        print("Restoring variables from {}".format(restore_path))
+        logger.info("Restoring variables from checkpoint: {}".format(restore_path))
         restoring_saver.restore(sess, restore_path)
+    else:
+        logger.info("Initializing brand new network parameters.")
+        sess.run(local_init_op)
     global_step = sess.run(ml.global_step)
     logger.info("Beginning training.")
     logger.info("To visualize, call:\ntensorboard --logdir={}".format(logdir))
     while (not args.maxsteps) or global_step < args.maxsteps:
         transition_data = ml.create_transition_dataset(max_horizon,
                                                        n=20000,
-                                                       minimum_steps=3,
+                                                       minimum_steps=2,
                                                        label_extractor=label_extractor)
         for batch in dataset.iterbatches(transition_data,
                                          batch_size=args.batchsize,

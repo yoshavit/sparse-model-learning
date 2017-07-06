@@ -12,7 +12,7 @@ DEFAULT_STEPSIZE = 1e-4
 
 
 class ModelLearner:
-    def __init__(self, env, feature_size,
+    def __init__(self, env, feature_shape,
                  stepsize=DEFAULT_STEPSIZE,
                  latent_size=10,
                  max_horizon=3,
@@ -20,6 +20,8 @@ class ModelLearner:
                  summary_writer=None,
                  has_labels=False,
                  force_latent_consistency=True,
+                 feature_regression=False,
+                 feature_softmax=False,
                  feature_extractor=None):
         """Creates a model-learner framework
 
@@ -37,7 +39,7 @@ class ModelLearner:
         with tf.variable_scope("envmodel"):
             self.envmodel = EnvModel(env.observation_space,
                                      env.action_space,
-                                     feature_size,
+                                     feature_shape,
                                      max_horizon=max_horizon,
                                      latent_size=latent_size,
                                      transition_stacked_dim=transition_stacked_dim)
@@ -52,9 +54,16 @@ class ModelLearner:
         self.actions = [tf.placeholder(tf.int32, shape=[None],
                                        name="action%d"%i)
                         for i in range(max_horizon)]
-        self.features = [tf.placeholder(tf.float32, shape=[None, feature_size],
-                                        name="feature%d"%i)
-                         for i in range(max_horizon + 1)]
+        if feature_regression:
+            self.features = [tf.placeholder(tf.float32, shape=[None] + feature_shape,
+                                            name="feature%d"%i)
+                             for i in range(max_horizon + 1)]
+        elif feature_softmax:
+            self.features = [tf.placeholder(tf.int32, shape=[None] + feature_shape[:-1],
+                                            name="feature%d"%i)
+                             for i in range(max_horizon + 1)]
+        else:
+            raise RuntimeError("Feature loss must be either regression or softmax")
         self.seq_length = tf.placeholder(tf.int32, shape=[None, 1], name="seq_length")
         inc_step = self.global_step.assign_add(tf.shape(self.states)[0])
         self.local_steps = 0
@@ -65,7 +74,10 @@ class ModelLearner:
                 tf.stack(self.actions, axis=1),
                 tf.stack(self.features, axis=1),
                 seq_length=self.seq_length,
-                x_to_f_ratio=int(force_latent_consistency))
+                x_to_f_ratio=int(force_latent_consistency),
+                feature_regression=feature_regression,
+                feature_softmax=feature_softmax
+            )
             grads = tf.gradients(self.loss, var_list)
             grads, _ = tf.clip_by_global_norm(grads, 40.0)
             grads_and_vars = list(zip(grads, var_list))
@@ -103,7 +115,7 @@ class ModelLearner:
         Args:
             states - array of shape batch_size x T+1 x [state_shape]
             actions - array of shape batch_size x T x 1
-            features - array batch_size x T+1 x feature_size
+            features - array batch_size x T+1 x feature_shape
             seq_lengths - array batch_size x 1
             labels - (optional) array of batch_size x T+1 x 1
             sess - [MUST SPECIFY] current tensorflow session

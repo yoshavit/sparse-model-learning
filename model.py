@@ -5,7 +5,7 @@ from utils.gruacell import GRUACell
 from utils.multirnncell import ExposedMultiRNNCell
 
 class EnvModel:
-    def __init__(self, ob_space, ac_space, feature_size, max_horizon=10,
+    def __init__(self, ob_space, ac_space, feature_shape, max_horizon=10,
                  latent_size=128, transition_stacked_dim=1):
         """Creates a model-learner framework
         max_horizon is the # of unrolled steps, with 0 unrolled steps meaning
@@ -19,7 +19,7 @@ class EnvModel:
         self.default_encoder = self.default_transition = self.default_featurer = None
         self.max_horizon = max_horizon
         self.latent_size = latent_size
-        self.feature_size = feature_size
+        self.feature_shape = feature_shape
         self.transition_stacked_dim = transition_stacked_dim
         # assert latent_size%transition_stacked_dim == 0, "latent_size must divide evenly into transition_stacked_dim components, but was {}, {}".format(latent_size, transition_stacked_dim)
 
@@ -104,13 +104,16 @@ class EnvModel:
             reuse = True
         with tf.variable_scope(self.featurer_scope, reuse=reuse) as scope:
             self.featurer_scope = scope
-            output = U.dense(latent_state, self.feature_size, "dense1",
+            feature_size = np.prod(self.feature_shape)
+            output = U.dense(latent_state, feature_size, "dense1",
                              weight_init=U.normc_initializer())
+            output = tf.reshape(output, [-1] + self.feature_shape)
         return output
 
     # -------------- LOSS FUNCTIONS -----------------------------------
 
-    def loss(self, states, actions, features, seq_length=None, x_to_f_ratio=1):
+    def loss(self, states, actions, features, seq_length=None, x_to_f_ratio=1,
+            feature_regression=False, feature_softmax=False):
         '''
         Estimates MSE prediction loss for features given states, actions, and a
         true feature_extractor. REQUIRED: T = self.max_horizon >= t > 0
@@ -119,12 +122,13 @@ class EnvModel:
         Args:
             states - n x (T+1) x [self.ob_space] tensor (up to t+1 unzeroed)
             actions - n x T tensor of action integers (up to t unzeroed)
-            features - n x (T+1) x self.feature_size tensor (up to t+1 unzeroed)
+            features - n x (T+1) x self.feature_shape tensor (up to t+1 unzeroed)
             seq_length - optional, n x 1 tensor representing t's,
             x_to_f_ratio - (optional) a scalar weighting the latent vs feature
                 loss. result_loss = feature_loss + x_to_f_ratio*latent_loss
         Returns:
-            loss - MSE error for feature prediction across time
+            loss - MSE error for embedding prediction across time, plus feature
+                loss (either regression or softmax classificaiton loss)
         '''
         summaries = []
         T = tf.shape(actions)[1]
@@ -167,17 +171,24 @@ class EnvModel:
         s_future = states[:, 1:]
         s_future_flattened = tf.reshape(s_future, [-1] + self.ob_space)
         x_future_flattened = self.build_encoder(s_future_flattened)
-        # zero-out unnecessary elements from x_future_flattened
         x_future = tf.reshape(x_future_flattened, [-1, T, self.latent_size])
-        # x_future = tf.reshape(x_future_flattened, [-1, t, self.latent_size])
         x_future_hat = self.build_transition(x0, actions, seq_length)
         x_hat = tf.concat([tf.expand_dims(x0, axis=1), x_future_hat], axis=1)
         x_flattened_hat = tf.reshape(x_hat, [-1, self.latent_size])
         f_flattened_hat = self.build_featurer(x_flattened_hat)
-        f_hat = tf.reshape(f_flattened_hat, [-1, T+1, self.feature_size])
+        f_hat = tf.reshape(f_flattened_hat, [-1, T+1] + self.feature_shape)
 
-        feature_diff = zero_out(tf.squared_difference(f, f_hat), seq_length+1,
-                                self.max_horizon + 1)
+        if feature_regression:
+            feature_diff = zero_out(tf.squared_difference(f, f_hat), seq_length+1,
+                                    self.max_horizon + 1)
+        elif feature_softmax:
+            feature_diff = zero_out(
+                tf.nn.sparse_softmax_cross_entropy_with_logits(logits=f_hat,
+                                                               labels=f),
+                seq_length + 1, self.max_horizon + 1)
+        else:
+            raise RuntimeError("Feature loss must be either regression or softmax")
+
         feature_loss = tf.reduce_mean(feature_diff,
             name="feature_loss")
         latent_diff = zero_out(tf.squared_difference(x_future, x_future_hat),
@@ -204,7 +215,8 @@ class EnvModel:
                                      dtype=tf.float32) + 1e-12, # to avoid dividing by 0
                     name="feature_loss%i"%i)
                 for i, t in enumerate(
-                    tf.split(tf.reduce_mean(feature_diff, axis=2),
+                    tf.split(tf.reduce_mean(feature_diff,
+                                            axis=list(range(2, len(f.shape)))),
                              self.max_horizon+1, axis=1))]
             # same, but latent state loss
             latent_losses = [

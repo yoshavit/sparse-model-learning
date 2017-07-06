@@ -73,7 +73,7 @@ class ModelLearner:
                 tf.train.AdamOptimizer(stepsize).apply_gradients(grads_and_vars),
                 inc_step)
         with tf.variable_scope("embedding"):
-            self.num_embed_vectors = 512
+            self.num_embed_vectors = 1024
             latent_tensors = [tf.squeeze(tensor, axis=1)
                               for tensor in tf.split(latents,
                                                      self.max_horizon+1,
@@ -182,7 +182,7 @@ class ModelLearner:
             self.replay_memory = self.replay_memory[-REPLAY_MEMORY_SIZE:]
 
     def create_transition_dataset(self, max_steps, n=None, feature_from_info=True,
-                                 label_extractor=None, variable_steps=True):
+                                 label_extractor=None, variable_steps=True, minimum_steps=1):
         """Constructs a list of model input matrices representing the
         components of the transitions. No guarantee of ordering or lack thereof ordering.
 
@@ -199,7 +199,7 @@ class ModelLearner:
         assert self.replay_memory, "Must gather_gameplay_data before creating\
 transition dataset!"
         transition_seqs = []
-        candidate_steps = list(range(1, max_steps+1)) if variable_steps else [max_steps]
+        candidate_steps = list(range(minimum_steps, max_steps+1)) if variable_steps else [max_steps]
         for game in self.replay_memory:
             for n_steps in candidate_steps:
                 for i in range(len(game) - n_steps + 1):

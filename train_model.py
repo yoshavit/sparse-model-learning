@@ -63,9 +63,9 @@ transition_stacked_dim = 3
 # # Label is separate from info
 # label_extractor = lambda info: [info]
 # ------- 9-game features---------------
-feature_extractor = lambda info: info.flatten()
-feature_size = 4
-label_extractor = None
+feature_extractor = lambda info: info.flatten()[:6]
+feature_size = 6
+label_extractor = lambda info: info[2][0]
 # ----------------------------------
 has_labels = bool(label_extractor)
 logdir = os.path.join('data', args.env, args.logdir, 'train')
@@ -91,23 +91,19 @@ ml.gather_gameplay_data(200)
 restoring_saver = tf.train.Saver(var_list=[var for var in tf.global_variables()
                                            if var.name[:9] != "embedding"])
 local_init_op = tf.global_variables_initializer()
-sv = tf.train.Supervisor(
-    saver=restoring_saver,
-    logdir=logdir,
-    local_init_op=local_init_op,
-    summary_op=None,
-    summary_writer=sw,
-    global_step=ml.global_step,
-    save_model_secs=0,
-    save_summaries_secs=20)
-with sv.managed_session() as sess:
+restore_path = tf.train.latest_checkpoint(logdir)
+with tf.Session() as sess:
+    sess.run(local_init_op)
+    if restore_path is not None:
+        print("Restoring variables from {}".format(restore_path))
+        restoring_saver.restore(sess, restore_path)
     global_step = sess.run(ml.global_step)
     logger.info("Beginning training.")
     logger.info("To visualize, call:\ntensorboard --logdir={}".format(logdir))
-    while not sv.should_stop() and ((not args.maxsteps) or global_step <
-                                    args.maxsteps):
+    while (not args.maxsteps) or global_step < args.maxsteps:
         transition_data = ml.create_transition_dataset(max_horizon,
                                                        n=20000,
+                                                       minimum_steps=3,
                                                        label_extractor=label_extractor)
         for batch in dataset.iterbatches(transition_data,
                                          batch_size=args.batchsize,
@@ -118,7 +114,7 @@ with sv.managed_session() as sess:
             logger.info("Creating embedding...")
             # create a dataset of max_horizon length transitions
             transition_data = ml.create_transition_dataset(max_horizon,
-                                                           n=1000,
+                                                           n=2000,
                                                            label_extractor=label_extractor,
                                                            variable_steps=False)
             batch = next(dataset.iterbatches(transition_data,

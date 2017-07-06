@@ -21,7 +21,7 @@ class EnvModel:
         self.latent_size = latent_size
         self.feature_size = feature_size
         self.transition_stacked_dim = transition_stacked_dim
-        assert latent_size%transition_stacked_dim == 0, "latent_size must divide evenly into transition_stacked_dim components, but was {}, {}".format(latent_size, transition_stacked_dim)
+        # assert latent_size%transition_stacked_dim == 0, "latent_size must divide evenly into transition_stacked_dim components, but was {}, {}".format(latent_size, transition_stacked_dim)
 
         # CURRENTLY NOT REALLY USED:
         self.input_state = tf.placeholder(tf.float32, name="input_state",
@@ -82,13 +82,14 @@ class EnvModel:
                 # self.latent_size//self.transition_stacked_dim, n_factors)
             def cell():
                 return tf.contrib.rnn.GRUBlockCell(
-                    self.latent_size//self.transition_stacked_dim)
+                    self.latent_size)
             # note that we use a special version of MultiRNNCell
             # to expose the entire RNN's internal state at each timestep
-            stacked_cell = ExposedMultiRNNCell(
+            # stacked_cell = ExposedMultiRNNCell(
+                # [cell() for _ in range(self.transition_stacked_dim)])
+            stacked_cell = tf.contrib.rnn.MultiRNNCell(
                 [cell() for _ in range(self.transition_stacked_dim)])
-            initial_state = tuple(tf.split(x, self.transition_stacked_dim,
-                                     axis=1))
+            initial_state = tuple([x] + [tf.zeros_like(x) for _ in range(self.transition_stacked_dim - 1)])
             next_states, _ = tf.nn.dynamic_rnn(stacked_cell,
                                                actions,
                                                initial_state=initial_state,

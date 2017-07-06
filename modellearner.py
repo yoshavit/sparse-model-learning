@@ -47,21 +47,17 @@ class ModelLearner:
             "global_step", [], tf.int32,
             initializer=tf.constant_initializer(0, dtype=tf.int32),
             trainable=False)
-        self.states = [tf.placeholder(tf.float32, shape=[None] +
-                                      list(env.observation_space.shape),
-                                      name="state%d"%i)
-                       for i in range(max_horizon + 1)]
-        self.actions = [tf.placeholder(tf.int32, shape=[None],
-                                       name="action%d"%i)
-                        for i in range(max_horizon)]
+        self.states = tf.placeholder(tf.float32, shape=[None, max_horizon + 1] +
+                                      list(env.observation_space.shape), name="states")
+        self.actions = tf.placeholder(tf.int32, shape=[None, max_horizon], name="actions")
         if feature_regression:
-            self.features = [tf.placeholder(tf.float32, shape=[None] + feature_shape,
-                                            name="feature%d"%i)
-                             for i in range(max_horizon + 1)]
+            self.features = tf.placeholder(tf.float32,
+                                           shape=[None, max_horizon+1] + feature_shape,
+                                           name="features")
         elif feature_softmax:
-            self.features = [tf.placeholder(tf.int32, shape=[None] + feature_shape[:-1],
-                                            name="feature%d"%i)
-                             for i in range(max_horizon + 1)]
+            self.features = tf.placeholder(tf.int32,
+                                           shape=[None,max_horizon+1] + feature_shape[:-1],
+                                           name="features")
         else:
             raise RuntimeError("Feature loss must be either regression or softmax")
         self.seq_length = tf.placeholder(tf.int32, shape=[None, 1], name="seq_length")
@@ -70,9 +66,9 @@ class ModelLearner:
 
         with tf.variable_scope("train"):
             self.loss, latents, var_list, base_summary, timestep_summary = self.envmodel.loss(
-                tf.stack(self.states, axis=1),
-                tf.stack(self.actions, axis=1),
-                tf.stack(self.features, axis=1),
+                self.states,
+                self.actions,
+                self.features,
                 seq_length=self.seq_length,
                 x_to_f_ratio=int(force_latent_consistency),
                 feature_regression=feature_regression,
@@ -115,13 +111,12 @@ class ModelLearner:
         Args:
             states - array of shape batch_size x T+1 x [state_shape]
             actions - array of shape batch_size x T x 1
-            features - array batch_size x T+1 x feature_shape
+            features - array batch_size x T+1 x feature_shape([:-1] in case of classification)
             seq_lengths - array batch_size x 1
             labels - (optional) array of batch_size x T+1 x 1
             sess - [MUST SPECIFY] current tensorflow session
             show_embeddings - if true, create embeddings
         """
-        T = actions.shape[1]
         do_summary = self.local_steps%20 == 1
         if do_summary:
             fetches = [self.train_op, self.global_step, self.summary_op]
@@ -130,12 +125,9 @@ class ModelLearner:
         if show_embeddings:
             fetches += [self.embeddings_op]
         feed_dict = {self.seq_length: seq_lengths,
-                     self.states[0]: states[:, 0],
-                     self.features[0]: features[:, 0]}
-        for t in range(T):
-            feed_dict[self.states[t+1]] = states[:, t+1]
-            feed_dict[self.actions[t]] = actions[:, t]
-            feed_dict[self.features[t+1]] = features[:, t+1]
+                     self.states: states,
+                     self.actions: actions,
+                     self.features: features}
         fetched = sess.run(fetches, feed_dict=feed_dict)
         self.local_steps += 1
         if do_summary:

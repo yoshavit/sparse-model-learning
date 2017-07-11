@@ -50,6 +50,10 @@ class ModelLearner:
         self.states = tf.placeholder(tf.float32, shape=[None, max_horizon + 1] +
                                       list(env.observation_space.shape), name="states")
         self.actions = tf.placeholder(tf.int32, shape=[None, max_horizon], name="actions")
+        self.goals = tf.placeholder(tf.int32, shape=[None, max_horizon], name="goals")
+        self.goal_states = tf.placeholder(tf.int32, shape=[None] +
+                                          list(env.observation_space.shape),
+                                          name="goal_states")
         if feature_regression:
             self.features = tf.placeholder(tf.float32,
                                            shape=[None, max_horizon+1] + feature_shape,
@@ -69,6 +73,8 @@ class ModelLearner:
                 self.states,
                 self.actions,
                 self.features,
+                goal_values=self.goals,
+                goal_states=self.goal_states,
                 seq_length=self.seq_length,
                 x_to_f_ratio=int(force_latent_consistency),
                 feature_regression=feature_regression,
@@ -180,6 +186,7 @@ class ModelLearner:
                 action = policy(obs)
                 new_obs, rew, done, info = self.env.step(action)
                 game_memory.append((obs, action, new_obs, rew, bool(done), info))
+                assert int(bool(rew)) == rew, "Game must have goal-type rewards"
                 obs = new_obs
             self.replay_memory.append(tuple(game_memory))
         if len(self.replay_memory) > REPLAY_MEMORY_SIZE:
@@ -216,6 +223,10 @@ transition dataset!"
                     actions = [transitions[j][1] for j in range(n_steps)] +\
                             [np.zeros_like(transitions[0][1])
                              for j in range(max_steps - n_steps)]
+                    goals = [transitions[j][3] for j in range(n_steps)] +\
+                            [np.zeros_like(transitions[0][1])
+                             for j in range(max_steps - n_steps)]
+                    goal_states = [transitions[0][5]['goal_state']]
                     if feature_from_info:
                         features = [self.feature_extractor(transitions[j][5]['state'])
                                     for j in range(n_steps)] +\
@@ -231,7 +242,8 @@ transition dataset!"
                         labels += [np.zeros_like(labels[0]) for j in
                                    range(max_steps - n_steps)]
                     seq_length = [n_steps]
-                    transition_seq = [states, actions, features, seq_length]
+                    transition_seq = [states, actions, features, goals,
+                                      goal_states, seq_length]
                     if label_extractor:
                         transition_seq.append(labels)
                     transition_seqs.append(transition_seq)

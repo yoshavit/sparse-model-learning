@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+import os
 from utils import tf_util as U
 from utils.gruacell import GRUACell
 from utils.multirnncell import ExposedMultiRNNCell
@@ -15,7 +16,7 @@ class EnvModel:
         """
         self.ob_space = list(ob_space.shape)
         self.ac_space = ac_space.n
-        self.encoder_scope = self.transition_scope = self.featurer_scope = None
+        self.encoder_scope = self.transition_scope = self.featurer_scope = self.goal_scope = None
         self.default_encoder = self.default_transition = self.default_featurer = None
         self.max_horizon = max_horizon
         self.latent_size = latent_size
@@ -110,10 +111,38 @@ class EnvModel:
             output = tf.reshape(output, [-1] + self.feature_shape)
         return output
 
+    def build_goaler(self, latent_state, goal_state=None):
+        if not self.goaler_scope:
+            self.goaler_scope = "goaler"
+            reuse = False
+        else:
+            reuse = True
+        with tf.variable_scope(self.goaler_scope, reuse=reuse) as scope:
+            self.goaler_scope = scope
+            if goal_state is not None:
+                x = tf.concat([latent_state, goal_state], axis=1)
+            else:
+                x = latent_state
+            x = U.dense(x, 128, "dense1",
+                        weight_init=U.normc_initializer())
+            x = U.dense(x, 1, "dense2",
+                        weight_init=U.normc_initializer())
+            output = tf.squeeze(x, axis=1)
+        return output
+
     # -------------- LOSS FUNCTIONS -----------------------------------
 
-    def loss(self, states, actions, features, seq_length=None, x_to_f_ratio=1,
-            feature_regression=False, feature_softmax=False):
+    def loss(self,
+             states,
+             actions,
+             features,
+             goal_states=None,
+             goal_values=None,
+             seq_length=None,
+             x_to_f_ratio=1,
+             x_to_g_ratio=1,
+             feature_regression=False,
+             feature_softmax=False):
         '''
         Estimates MSE prediction loss for features given states, actions, and a
         true feature_extractor. REQUIRED: T = self.max_horizon >= t > 0
@@ -123,6 +152,9 @@ class EnvModel:
             states - n x (T+1) x [self.ob_space] tensor (up to t+1 unzeroed)
             actions - n x T tensor of action integers (up to t unzeroed)
             features - n x (T+1) x self.feature_shape tensor (up to t+1 unzeroed)
+            goal_states - n x [self.ob_space]
+            goal_values - n x T tensor (1 or 0) representing whether goal
+                was reached after t transitions
             seq_length - optional, n x 1 tensor representing t's,
             x_to_f_ratio - (optional) a scalar weighting the latent vs feature
                 loss. result_loss = feature_loss + x_to_f_ratio*latent_loss
@@ -132,6 +164,7 @@ class EnvModel:
         '''
         summaries = []
         T = tf.shape(actions)[1]
+        use_goals = goal_values is not None
         s0 = states[:, 0]
         x0 = self.build_encoder(s0)
         f = features
@@ -173,10 +206,26 @@ class EnvModel:
         x_future_flattened = self.build_encoder(s_future_flattened)
         x_future = tf.reshape(x_future_flattened, [-1, T, self.latent_size])
         x_future_hat = self.build_transition(x0, actions, seq_length)
+        x_future_flattened_hat = tf.reshape(x_future_hat, [-1, self.latent_size])
         x_hat = tf.concat([tf.expand_dims(x0, axis=1), x_future_hat], axis=1)
         x_flattened_hat = tf.reshape(x_hat, [-1, self.latent_size])
         f_flattened_hat = self.build_featurer(x_flattened_hat)
         f_hat = tf.reshape(f_flattened_hat, [-1, T+1] + self.feature_shape)
+
+        if use_goals:
+            g = goal_values
+            if goal_states is None:
+                g_hat = self.build_goaler(x_future_flattened_hat)
+            else:
+                sg = goal_states
+                xg = self.build_encoder(sg)
+                xg_padded = tf.tile(xg, [1, T])
+                g_hat = self.build_goaler(x_future_flattened_hat, xg_padded)
+            g_hat = tf.squeeze(g_hat, axis=-1)
+            goal_diff = zero_out(
+                tf.nn.sigmoid_cross_entropy_with_logits(labels=g,
+                                                        logits=g_hat))
+            goal_loss = tf.reduce_mean(goal_diff, name="goal_loss")
 
         if feature_regression:
             feature_diff = zero_out(tf.squared_difference(f, f_hat), seq_length+1,
@@ -189,14 +238,17 @@ class EnvModel:
         else:
             raise RuntimeError("Feature loss must be either regression or softmax")
 
-        feature_loss = tf.reduce_mean(feature_diff,
-            name="feature_loss")
+        feature_loss = tf.reduce_mean(feature_diff, name="feature_loss")
         latent_diff = zero_out(tf.squared_difference(x_future, x_future_hat),
                                seq_length, self.max_horizon)
-        latent_loss = tf.reduce_mean(latent_diff,
-            name='latent_loss')
-        total_loss = tf.identity(feature_loss + x_to_f_ratio*latent_loss,
-                                 name="overall_loss")
+        latent_loss = tf.reduce_mean(latent_diff, name='latent_loss')
+        if use_goals:
+            total_loss = tf.identity(feature_loss + x_to_f_ratio*latent_loss +
+                                     x_to_g_ratio*goal_loss,
+                                     name="overall_loss")
+        else:
+            total_loss = tf.identity(feature_loss + x_to_f_ratio*latent_loss,
+                                     name="overall_loss")
 
         summaries.extend([
             tf.summary.scalar('overall feature loss', feature_loss),
@@ -204,6 +256,8 @@ class EnvModel:
             tf.summary.scalar('overall loss', total_loss),
             tf.summary.image('input', s0),
         ])
+        if use_goals: summaries.append(tf.summary.scalar('overall goal loss',
+                                                          goal_loss))
 
         #timestep summaries
         with tf.variable_scope("timestep"):
@@ -224,14 +278,26 @@ class EnvModel:
                     tf.reduce_sum(tf.squeeze(t, axis=1), axis=0),
                     tf.count_nonzero(tf.squeeze(t, axis=1), axis=0,
                                      dtype=tf.float32) + 1e-12,
-                    name="latents_loss%i"%(i+1))
+                    name="latent_loss%i"%(i+1))
                 for i, t in enumerate(
                     tf.split(tf.reduce_mean(latent_diff, axis=2),
                              self.max_horizon, axis=1))]
-
+            # same, but for goals
+            if use_goals:
+                goal_losses = [
+                    tf.div(
+                        tf.reduce_sum(tf.squeeze(t, axis=1), axis=0),
+                        tf.count_nonzero(tf.squeeze(t, axis=1), axis=0,
+                                         dtype=tf.float32) + 1e-12,
+                        name="goals_loss%i"%(i+1))
+                    for i, t in enumerate(
+                        tf.split(goal_diff,
+                                 self.max_horizon, axis=1))]
+            else:
+                goal_losses = []
             timestep_summaries = []
-            for loss in feature_losses + latent_losses:
-                loss_name = loss.name[-15:]
+            for loss in feature_losses + latent_losses + goal_losses:
+                _, loss_name = os.path.split(loss.name)
                 timestep_summaries.extend([
                     tf.summary.scalar(loss_name, loss),
                     tf.summary.histogram(loss_name, loss)

@@ -35,11 +35,9 @@ parser.add_argument('--run-id', help="Log suffix pointing to experiment to"
                     type=str)
 parser.add_argument('--show-embeddings', help="Project model progress using labelled embeddings",
                     action='store_true')
-parser.add_argument('--no-train', help="Do not update the parameters",
-                    action="store_true")
-parser.add_argument('--ignore-latent-consistency',
-                    help="Penalize latent encodings' consistency with each other via MSE",
-                    action="store_true")
+# parser.add_argument('--ignore-latent-consistency',
+                    # help="Penalize latent encodings' consistency with each other via MSE",
+                    # action="store_true")
 parser.add_argument('-batchsize', help="Batch size for learning", type=int,
                     default=16)
 parser.add_argument('--maxhorizon', help="Max number of steps to simulate"
@@ -52,46 +50,68 @@ parser.add_argument('--latentsize', type=int, default=64,
                     help="Number of latent dimensions used to encode the state")
 
 args = parser.parse_args()
-env = gym.make(args.env)
-max_horizon = args.maxhorizon
-transition_stacked_dim = 3
+# ----------------------------------------------
+"""
+Things needed in config file:
+"""
+# simple multi-goal config
+mnist_multigoal_config = {
+    'env': 'mnist-multigoal-v0',
+    'logdir': args.logdir,
+    'stepsize': args.stepsize,
+    'maxsteps': args.maxsteps,
+    'feature_extractor': lambda state_info: [state_info],
+    'feature_shape': [1],
+    'feature_regression': True,
+    'feature_softmax': False,
+            # label_extractor - (optional) function from info['state'/'next_state']
+                # to label. If provided, output includes a fourth column, "labels"
+    'label_extractor': lambda state_info: [state_info],
+    'has_labels': True,
+    'latent_size': args.latentsize,
+    'maxhorizon': args.maxhorizon,
+    'force_latent_consistency': True,
+    'transition_stacked_dim': 1,
+    'minimum_steps': 1,
+    'n_initial_games': 500,
+    'use_goalstates': True,
+}
+config = mnist_multigoal_config
+
+env = gym.make(config['env'])
+
+
 # ------ MNIST features ------------
 # Feature will be true MNIST digit
-# Feature is extracted from info
-# feature_extractor = lambda info: [info%5]
-# feature_shape = [1]
-# # Label is separate from info
-# label_extractor = lambda info: [info]
+# Feature is extracted from info['state']
+feature_extractor = lambda state_info: [state_info%5]
+feature_shape = [1]
+# Label is separate from info['state']
+label_extractor = lambda state_info: [state_info]
+feature_regression = True
+feature_softmax = False
 # ------- 9-game features---------------
-feature_extractor = lambda info: info
-feature_shape = [3, 3, 9]
-label_extractor = lambda info: info[2][0]
-feature_regression = False
-feature_softmax = True
+# feature_extractor = lambda info: info
+# feature_shape = [3, 3, 9]
+# label_extractor = lambda info: info[2][0]
+# feature_regression = False
+# feature_softmax = True
 # ----------------------------------
 has_labels = bool(label_extractor)
-logdir = os.path.join('data', args.env, args.logdir, 'train')
+logdir = os.path.join('data', config['env'], config['logdir'], 'train')
 if args.run_id:
     logdir = os.path.join(logdir, args.run_id)
 else: # increment until we get a new id
     logdir = increment_path(os.path.join(logdir, "run"))
 logger.info("Logging results to {}".format(logdir))
 sw = tf.summary.FileWriter(logdir)
-ml = ModelLearner(env, feature_shape, args.stepsize,
-                  latent_size=args.latentsize,
-                  max_horizon=max_horizon,
-                  summary_writer=sw,
-                  has_labels=has_labels,
-                  force_latent_consistency=(not
-                                            args.ignore_latent_consistency),
-                  feature_softmax=feature_softmax,
-                  feature_regression=feature_regression,
-                  feature_extractor=feature_extractor,
-                  transition_stacked_dim=transition_stacked_dim)
+ml = ModelLearner(env,
+                  config,
+                  summary_writer=sw)
 saver = tf.train.Saver()
 savepath = os.path.join(logdir, "model.ckpt")
 logger.info("Gathering initial gameplay data!")
-ml.gather_gameplay_data(10)
+ml.gather_gameplay_data(config['n_initial_games'])
 restoring_saver = tf.train.Saver(var_list=[var for var in tf.global_variables()
                                            if var.name[:9] != "embedding"])
 local_init_op = tf.global_variables_initializer()
@@ -106,11 +126,8 @@ with tf.Session() as sess:
     global_step = sess.run(ml.global_step)
     logger.info("Beginning training.")
     logger.info("To visualize, call:\ntensorboard --logdir={}".format(logdir))
-    while (not args.maxsteps) or global_step < args.maxsteps:
-        transition_data = ml.create_transition_dataset(max_horizon,
-                                                       n=20000,
-                                                       minimum_steps=2,
-                                                       label_extractor=label_extractor)
+    while (not args.maxsteps) or global_step < config['maxsteps']:
+        transition_data = ml.create_transition_dataset(n=20000)
         for batch in dataset.iterbatches(transition_data,
                                          batch_size=args.batchsize,
                                          shuffle=True):
@@ -119,9 +136,7 @@ with tf.Session() as sess:
             # Train a single step of ml.num_embed_vectors instances
             logger.info("Creating embedding...")
             # create a dataset of max_horizon length transitions
-            transition_data = ml.create_transition_dataset(max_horizon,
-                                                           n=2000,
-                                                           label_extractor=label_extractor,
+            transition_data = ml.create_transition_dataset(n=ml.num_embed_vectors,
                                                            variable_steps=False)
             batch = next(dataset.iterbatches(transition_data,
                                              batch_size=ml.num_embed_vectors,

@@ -16,7 +16,7 @@ class EnvModel:
         """
         self.ob_space = list(ob_space.shape)
         self.ac_space = ac_space.n
-        self.encoder_scope = self.transition_scope = self.featurer_scope = self.goal_scope = None
+        self.encoder_scope = self.transition_scope = self.featurer_scope = self.goaler_scope = None
         self.default_encoder = self.default_transition = self.default_featurer = None
         self.max_horizon = max_horizon
         self.latent_size = latent_size
@@ -111,7 +111,7 @@ class EnvModel:
             output = tf.reshape(output, [-1] + self.feature_shape)
         return output
 
-    def build_goaler(self, latent_state, goal_state=None):
+    def build_goaler(self, latent_state, latent_goal_state=None):
         if not self.goaler_scope:
             self.goaler_scope = "goaler"
             reuse = False
@@ -119,8 +119,8 @@ class EnvModel:
             reuse = True
         with tf.variable_scope(self.goaler_scope, reuse=reuse) as scope:
             self.goaler_scope = scope
-            if goal_state is not None:
-                x = tf.concat([latent_state, goal_state], axis=1)
+            if latent_goal_state is not None:
+                x = tf.concat([latent_state, latent_goal_state], axis=1)
             else:
                 x = latent_state
             x = U.dense(x, 128, "dense1",
@@ -163,7 +163,7 @@ class EnvModel:
                 loss (either regression or softmax classificaiton loss)
         '''
         summaries = []
-        T = tf.shape(actions)[1]
+        T = actions.get_shape().as_list()[1]
         use_goals = goal_values is not None
         s0 = states[:, 0]
         x0 = self.build_encoder(s0)
@@ -219,12 +219,13 @@ class EnvModel:
             else:
                 sg = goal_states
                 xg = self.build_encoder(sg)
-                xg_padded = tf.tile(xg, [1, T])
+                xg_padded = tf.tile(xg, [T, 1])
                 g_hat = self.build_goaler(x_future_flattened_hat, xg_padded)
-            g_hat = tf.squeeze(g_hat, axis=-1)
+            g_hat = tf.reshape(g_hat, [-1, T])
             goal_diff = zero_out(
                 tf.nn.sigmoid_cross_entropy_with_logits(labels=g,
-                                                        logits=g_hat))
+                                                        logits=g_hat),
+                seq_length, self.max_horizon)
             goal_loss = tf.reduce_mean(goal_diff, name="goal_loss")
 
         if feature_regression:

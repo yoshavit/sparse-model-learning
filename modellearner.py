@@ -12,55 +12,44 @@ DEFAULT_STEPSIZE = 1e-4
 
 
 class ModelLearner:
-    def __init__(self, env, feature_shape,
-                 stepsize=DEFAULT_STEPSIZE,
-                 latent_size=10,
-                 max_horizon=3,
-                 transition_stacked_dim=1,
-                 summary_writer=None,
-                 has_labels=False,
-                 force_latent_consistency=True,
-                 feature_regression=False,
-                 feature_softmax=False,
-                 feature_extractor=None):
+    def __init__(self, env,
+                 config,
+                 summary_writer=None):
         """Creates a model-learner framework
-
-        Args:
-            max_horizon - number of steps transition model rolls forward (1 means
-            1-step lookahead)
-            feature_extractor - (optional) takes as input an array of states (concated
-                along 0 dimension), outputs an array of features
         """
         self.replay_memory = []
         self.env = env
-        self.feature_extractor = feature_extractor
-        self.max_horizon = max_horizon
+        self.config = config
+        maxhorizon = config['maxhorizon']
         self.summary_writer=summary_writer
+        feature_shape = config['feature_shape']
         with tf.variable_scope("envmodel"):
             self.envmodel = EnvModel(env.observation_space,
                                      env.action_space,
                                      feature_shape,
-                                     max_horizon=max_horizon,
-                                     latent_size=latent_size,
-                                     transition_stacked_dim=transition_stacked_dim)
+                                     max_horizon=config['maxhorizon'],
+                                     latent_size=config['latent_size'],
+                                     transition_stacked_dim=config['transition_stacked_dim'])
         self.global_step = tf.get_variable(
             "global_step", [], tf.int32,
             initializer=tf.constant_initializer(0, dtype=tf.int32),
             trainable=False)
-        self.states = tf.placeholder(tf.float32, shape=[None, max_horizon + 1] +
+        self.states = tf.placeholder(tf.float32, shape=[None, maxhorizon + 1] +
                                       list(env.observation_space.shape), name="states")
-        self.actions = tf.placeholder(tf.int32, shape=[None, max_horizon], name="actions")
-        self.goals = tf.placeholder(tf.int32, shape=[None, max_horizon], name="goals")
-        self.goal_states = tf.placeholder(tf.int32, shape=[None] +
+        self.actions = tf.placeholder(tf.int32, shape=[None, maxhorizon], name="actions")
+        self.goal_values = tf.placeholder(tf.float32, shape=[None,
+                                                             maxhorizon],
+                                          name="goal_values")
+        self.goal_states = tf.placeholder(tf.float32, shape=[None] +
                                           list(env.observation_space.shape),
                                           name="goal_states")
-        if feature_regression:
+        if config['feature_regression']:
             self.features = tf.placeholder(tf.float32,
-                                           shape=[None, max_horizon+1] + feature_shape,
+                                           shape=[None, maxhorizon+1] + feature_shape,
                                            name="features")
-        elif feature_softmax:
+        elif config['feature_softmax']:
             self.features = tf.placeholder(tf.int32,
-                                           shape=[None,max_horizon+1] + feature_shape[:-1],
+                                           shape=[None,maxhorizon+1] + feature_shape[:-1],
                                            name="features")
         else:
             raise RuntimeError("Feature loss must be either regression or softmax")
@@ -73,51 +62,54 @@ class ModelLearner:
                 self.states,
                 self.actions,
                 self.features,
-                goal_values=self.goals,
+                goal_values=self.goal_values,
                 goal_states=self.goal_states,
                 seq_length=self.seq_length,
-                x_to_f_ratio=int(force_latent_consistency),
-                feature_regression=feature_regression,
-                feature_softmax=feature_softmax
+                x_to_f_ratio=int(config['force_latent_consistency']),
+                feature_regression=config['feature_regression'],
+                feature_softmax=config['feature_softmax']
             )
             grads = tf.gradients(self.loss, var_list)
             grads, _ = tf.clip_by_global_norm(grads, 40.0)
             grads_and_vars = list(zip(grads, var_list))
             self.train_op = tf.group(
-                tf.train.AdamOptimizer(stepsize).apply_gradients(grads_and_vars),
+                tf.train.AdamOptimizer(config['stepsize']).apply_gradients(grads_and_vars),
                 inc_step)
         with tf.variable_scope("embedding"):
             self.num_embed_vectors = 1024
             latent_tensors = [tf.squeeze(tensor, axis=1)
                               for tensor in tf.split(latents,
-                                                     self.max_horizon+1,
+                                                     maxhorizon+1,
                                                      axis=1)]
             self.latent_variables = [tf.Variable(
-                tf.zeros([self.num_embed_vectors, latent_size]),
+                tf.zeros([self.num_embed_vectors, config['latent_size']]),
                 trainable=False, name="latent%i"%i)
-                for i in range(max_horizon + 1)]
+                for i in range(maxhorizon + 1)]
             self.embeddings_op = [tf.assign(variable, tensor) for variable, tensor
                                   in zip(self.latent_variables, latent_tensors)]
-            self.config = projector.ProjectorConfig()
+            self.projectorconfig = projector.ProjectorConfig()
             logdir = self.summary_writer.get_logdir()
-            for i in range(max_horizon + 1):
+            for i in range(maxhorizon + 1):
                 latent = self.latent_variables[i]
-                embedding = self.config.embeddings.add()
+                embedding = self.projectorconfig.embeddings.add()
                 embedding.tensor_name = latent.name
                 embedding.sprite.image_path = os.path.join(logdir,
                                                            'embed_sprite%d.png'%i)
-                if has_labels:
+                if config['has_labels']:
                     embedding.metadata_path = os.path.join(logdir,
                                                            'embed_labels%d.tsv'%i)
         self.summary_op = tf.summary.merge([base_summary, timestep_summary])
 
-    def train_model(self, sess, states, actions, features, seq_lengths, labels=None,
+    def train_model(self, sess, states, actions, features, goal_values,
+                    goal_states, seq_lengths, labels=None,
                    show_embeddings=False):
         """
         Args:
             states - array of shape batch_size x T+1 x [state_shape]
             actions - array of shape batch_size x T x 1
             features - array batch_size x T+1 x feature_shape([:-1] in case of classification)
+            goal_values
+            goal_states
             seq_lengths - array batch_size x 1
             labels - (optional) array of batch_size x T+1 x 1
             sess - [MUST SPECIFY] current tensorflow session
@@ -133,7 +125,10 @@ class ModelLearner:
         feed_dict = {self.seq_length: seq_lengths,
                      self.states: states,
                      self.actions: actions,
-                     self.features: features}
+                     self.features: features,
+                     self.goal_values: goal_values,
+                     self.goal_states: goal_states,
+                    }
         fetched = sess.run(fetches, feed_dict=feed_dict)
         self.local_steps += 1
         if do_summary:
@@ -141,8 +136,8 @@ class ModelLearner:
             self.summary_writer.flush()
         if show_embeddings:
             assert states.shape[0] == self.num_embed_vectors, "batch_size when embedding vectors must be modellearner.num_embed_vectors, because embedding variable size must be prespecified"
-            for i in range(self.max_horizon + 1):
-                embedding = self.config.embeddings[i]
+            for i in range(self.config['maxhorizon'] + 1):
+                embedding = self.projectorconfig.embeddings[i]
                 # images
                 image_data = states[:, i]
                 thumbnail_size = image_data.shape[1]
@@ -154,14 +149,14 @@ class ModelLearner:
                     sprite = sprite[:,:,0]
                 scipy.misc.imsave(embedding.sprite.image_path, sprite)
                 # labels
-                if labels is not None:
+                if self.config['has_labels']:
                     label_data = labels[:, i]
                     metadata_file = open(embedding.metadata_path, 'w')
                     metadata_file.write('Name\tClass\n')
                     for ll in range(label_data.shape[0]):
                         metadata_file.write('%06d\t%d\n' % (ll, label_data[ll]))
                     metadata_file.close()
-            projector.visualize_embeddings(self.summary_writer, self.config)
+            projector.visualize_embeddings(self.summary_writer, self.projectorconfig)
 
 # ------------- UTILITIES ------------------------------
 
@@ -192,25 +187,24 @@ class ModelLearner:
         if len(self.replay_memory) > REPLAY_MEMORY_SIZE:
             self.replay_memory = self.replay_memory[-REPLAY_MEMORY_SIZE:]
 
-    def create_transition_dataset(self, max_steps, n=None, feature_from_info=True,
-                                 label_extractor=None, variable_steps=True, minimum_steps=1):
+    def create_transition_dataset(self, n=None, feature_from_info=True,
+                                 variable_steps=True):
         """Constructs a list of model input matrices representing the
         components of the transitions. No guarantee of ordering or lack thereof ordering.
 
         Args:
-            max_steps - number of forward transition steps
             n - number of transitions to generate (if None use all transitions
                 from games)
-            feature_from_info - boolean, if true self.feature_extractor takes
+            feature_from_info - boolean, if true config['feature_extractor'] takes
                 as input "info['state']" or "info['next_state']" as returned by
                 the gym environment
-            label_extractor - (optional) function from info['state'/'next_state']
-                to label. If provided, output includes a fourth column, "labels"
         """
         assert self.replay_memory, "Must gather_gameplay_data before creating\
 transition dataset!"
         transition_seqs = []
-        candidate_steps = list(range(minimum_steps, max_steps+1)) if variable_steps else [max_steps]
+        max_steps = self.config['maxsteps'] # num forward transition steps
+        min_steps = self.config['minimum_steps']
+        candidate_steps = list(range(min_steps, max_steps+1)) if variable_steps else [max_steps]
         for game in self.replay_memory:
             for n_steps in candidate_steps:
                 for i in range(len(game) - n_steps + 1):
@@ -223,28 +217,30 @@ transition dataset!"
                     actions = [transitions[j][1] for j in range(n_steps)] +\
                             [np.zeros_like(transitions[0][1])
                              for j in range(max_steps - n_steps)]
-                    goals = [transitions[j][3] for j in range(n_steps)] +\
+                    goal_values = [transitions[j][3] for j in range(n_steps)] +\
                             [np.zeros_like(transitions[0][1])
                              for j in range(max_steps - n_steps)]
-                    goal_states = [transitions[0][5]['goal_state']]
+                    goal_states = transitions[0][5]['goal_state']
+                    feature_extractor = self.config['feature_extractor']
                     if feature_from_info:
-                        features = [self.feature_extractor(transitions[j][5]['state'])
+                        features = [feature_extractor(transitions[j][5]['state'])
                                     for j in range(n_steps)] +\
-                                [self.feature_extractor(transitions[-1][5]['next_state'])]
+                                [feature_extractor(transitions[-1][5]['next_state'])]
                     else:
                         features = [self.feature_extractor(s) for s in states]
                     features += [np.zeros_like(features[0])
                                  for j in range(max_steps - n_steps)]
-                    if label_extractor:
+                    if self.config['has_labels']:
+                        label_extractor = self.config['label_extractor']
                         labels = [label_extractor(
                             transitions[j][5]['state']) for j in range(n_steps)] +\
                             [label_extractor(transitions[-1][5]['next_state'])]
                         labels += [np.zeros_like(labels[0]) for j in
                                    range(max_steps - n_steps)]
                     seq_length = [n_steps]
-                    transition_seq = [states, actions, features, goals,
+                    transition_seq = [states, actions, features, goal_values,
                                       goal_states, seq_length]
-                    if label_extractor:
+                    if self.config['has_labels']:
                         transition_seq.append(labels)
                     transition_seqs.append(transition_seq)
         if n and n < len(transition_seqs):

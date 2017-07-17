@@ -202,8 +202,8 @@ class ModelLearner:
         assert self.replay_memory, "Must gather_gameplay_data before creating\
 transition dataset!"
         transition_seqs = []
-        max_steps = self.config['maxsteps'] # num forward transition steps
-        min_steps = self.config['minimum_steps']
+        max_steps = self.config['maxhorizon'] # num forward transition steps
+        min_steps = self.config['minhorizon']
         candidate_steps = list(range(min_steps, max_steps+1)) if variable_steps else [max_steps]
         for game in self.replay_memory:
             for n_steps in candidate_steps:

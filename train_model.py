@@ -72,7 +72,7 @@ mnist_multigoal_config = {
     'maxhorizon': args.maxhorizon,
     'force_latent_consistency': True,
     'transition_stacked_dim': 1,
-    'minimum_steps': 1,
+    'minhorizon': 1,
     'n_initial_games': 500,
     'use_goalstates': True,
 }
@@ -126,8 +126,9 @@ with tf.Session() as sess:
     global_step = sess.run(ml.global_step)
     logger.info("Beginning training.")
     logger.info("To visualize, call:\ntensorboard --logdir={}".format(logdir))
+    print("At least here?")
     while (not args.maxsteps) or global_step < config['maxsteps']:
-        transition_data = ml.create_transition_dataset(n=20000)
+        transition_data = ml.create_transition_dataset(n=200)
         for batch in dataset.iterbatches(transition_data,
                                          batch_size=args.batchsize,
                                          shuffle=True):

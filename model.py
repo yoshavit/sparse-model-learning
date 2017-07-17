@@ -36,7 +36,7 @@ class EnvModel:
         self.default_transition = self.build_transition(self.input_latent_state,
                                                         self.input_actions,
                                                         reuse=False)
-        self.default_goaler = self.build_goaler(self.input_latent_state,
+        self.default_goaler, _ = self.build_goaler(self.input_latent_state,
                                                 self.input_latent_goalstate,
                                                 reuse=False)
         self.default_featurer = self.build_featurer(self.input_latent_state,
@@ -95,16 +95,20 @@ class EnvModel:
                                                actions,
                                                initial_state=initial_state,
                                                sequence_length=seq_length)
+            next_states = tf.nn.sigmoid(next_states)
         return next_states
 
     def build_featurer(self, latent_state, reuse=True):
         with tf.variable_scope("featurer", reuse=reuse) as scope:
             self.featurer_scope = scope
             feature_size = np.prod(self.feature_shape)
-            output = U.dense(latent_state, feature_size, "dense1",
-                             weight_init=U.normc_initializer())
-            output = tf.reshape(output, [-1] + self.feature_shape)
-        return output
+            x = tf.nn.elu(U.dense(
+                latent_state, 256, "dense1",
+                weight_init=U.normc_initializer()))
+            x = U.dense(x, feature_size, "dense2",
+                        weight_init=U.normc_initializer())
+            output_logits = tf.reshape(x, [-1] + self.feature_shape)
+        return output_logits
 
     def build_goaler(self, latent_state, latent_goal_state=None, reuse=True):
         with tf.variable_scope("goaler", reuse=reuse) as scope:
@@ -113,12 +117,14 @@ class EnvModel:
                 x = tf.concat([latent_state, latent_goal_state], axis=1)
             else:
                 x = latent_state
-            x = U.dense(x, 256, "dense1",
-                        weight_init=U.normc_initializer())
+            x = tf.nn.elu(
+                U.dense(x, 256, "dense1", weight_init=U.normc_initializer()))
             x = U.dense(x, 1, "dense2",
                         weight_init=U.normc_initializer())
-            output = tf.squeeze(x, axis=1)
-        return output
+            x = tf.squeeze(x, axis=1)
+            output_logits = x
+            output = tf.sigmoid(output_logits)
+        return output, output_logits
 
     # -------------- LOSS FUNCTIONS -----------------------------------
 
@@ -200,31 +206,31 @@ class EnvModel:
         x_future_flattened_hat = tf.reshape(x_future_hat, [-1, self.latent_size])
         x_hat = tf.concat([tf.expand_dims(x0, axis=1), x_future_hat], axis=1)
         x_flattened_hat = tf.reshape(x_hat, [-1, self.latent_size])
-        f_flattened_hat = self.build_featurer(x_flattened_hat)
-        f_hat = tf.reshape(f_flattened_hat, [-1, T+1] + self.feature_shape)
-
+        f_flattened_hat_logits = self.build_featurer(x_flattened_hat)
+        f_hat_logits = tf.reshape(f_flattened_hat_logits, [-1, T+1] +
+                                  self.feature_shape)
         if use_goals:
             g = goal_values
             if goal_states is None:
-                g_hat = self.build_goaler(x_future_flattened_hat)
+                _, g_hat_logits = self.build_goaler(x_future_flattened_hat)
             else:
                 sg = goal_states
                 xg = self.build_encoder(sg)
                 xg_padded = tf.tile(xg, [T, 1])
-                g_hat = self.build_goaler(x_future_flattened_hat, xg_padded)
-            g_hat = tf.reshape(g_hat, [-1, T])
+                _, g_hat_logits = self.build_goaler(x_future_flattened_hat, xg_padded)
+            g_hat_logits = tf.reshape(g_hat_logits, [-1, T])
             goal_diff = zero_out(
                 tf.nn.sigmoid_cross_entropy_with_logits(labels=g,
-                                                        logits=g_hat),
+                                                        logits=g_hat_logits),
                 seq_length, max_horizon)
             goal_loss = tf.reduce_mean(goal_diff, name="goal_loss")
 
         if feature_regression:
-            feature_diff = zero_out(tf.squared_difference(f, f_hat), seq_length+1,
+            feature_diff = zero_out(tf.squared_difference(f, f_hat_logits), seq_length+1,
                                     max_horizon + 1)
         elif feature_softmax:
             feature_diff = zero_out(
-                tf.nn.sparse_softmax_cross_entropy_with_logits(logits=f_hat,
+                tf.nn.sparse_softmax_cross_entropy_with_logits(logits=f_hat_logits,
                                                                labels=f),
                 seq_length + 1, max_horizon + 1)
         else:
@@ -324,7 +330,7 @@ class EnvModel:
             nactions[0] += actions
             actions = nactions
         feed_dict = {self.input_latent_state: latent_state,
-                     self.input_action: actions}
+                     self.input_actions: actions}
         nxs = U.get_session().run(self.default_transition, feed_dict=feed_dict)
         nx = nxs[:, -1]
         if single_run:
@@ -349,8 +355,11 @@ class EnvModel:
             nlatent_state = np.zeros([self.test_batchsize, self.latent_size])
             nlatent_state[0] += latent_state
             latent_state = nlatent_state
+            nlatent_goal = np.zeros([self.test_batchsize, self.latent_size])
+            nlatent_goal[0] += latent_goal
+            latent_goal = nlatent_goal
         feed_dict = {self.input_latent_state: latent_state,
-                     self.input_goalstate: latent_goal}
+                     self.input_latent_goalstate: latent_goal}
         g = U.get_session().run(self.default_goaler, feed_dict=feed_dict)
         if single_run:
             g = g[0]

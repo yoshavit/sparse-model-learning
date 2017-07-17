@@ -99,17 +99,6 @@ mnist_multigoal_config = {
 config = mnist_config
 
 env = gym.make(config['env'])
-
-
-# ------ MNIST features ------------
-# Feature will be true MNIST digit
-# Feature is extracted from info['state']
-feature_extractor = lambda state_info: [state_info%5]
-feature_shape = [1]
-# Label is separate from info['state']
-label_extractor = lambda state_info: [state_info]
-feature_regression = True
-feature_softmax = False
 # ------- 9-game features---------------
 # feature_extractor = lambda info: info
 # feature_shape = [3, 3, 9]
@@ -117,7 +106,6 @@ feature_softmax = False
 # feature_regression = False
 # feature_softmax = True
 # ----------------------------------
-has_labels = bool(label_extractor)
 logdir = os.path.join('data', config['env'], config['logdir'], 'train')
 if args.run_id:
     logdir = os.path.join(logdir, args.run_id)

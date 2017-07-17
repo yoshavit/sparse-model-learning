@@ -5,6 +5,7 @@ from utils import tf_util as U
 
 class EnvModel:
     def __init__(self, ob_space, ac_space, feature_shape,
+                 uses_goal_states=True,
                  latent_size=128, transition_stacked_dim=1):
         """Creates a model-learner framework
         transition_stacked_dim is the number of stacked cells for each timestep
@@ -13,7 +14,6 @@ class EnvModel:
         self.ob_space = list(ob_space.shape)
         self.ac_space = ac_space.n
         self.encoder_scope = self.transition_scope = self.featurer_scope = self.goaler_scope = None
-        self.default_encoder = self.default_transition = self.default_featurer = self.default_goaler = None
         self.latent_size = latent_size
         self.feature_shape = feature_shape
         self.transition_stacked_dim = transition_stacked_dim
@@ -22,12 +22,21 @@ class EnvModel:
         self.input_state = tf.placeholder(tf.float32, name="input_state",
                                           shape=[self.test_batchsize] + self.ob_space)
         self.input_actions = tf.placeholder(tf.int32, name="input_actions",
-                                           shape=[self.test_batchsize, None])
+                                            shape=[self.test_batchsize, None])
         self.input_latent_state = tf.placeholder(tf.float32, name="input_latent_state",
                                                  shape=[self.test_batchsize, self.latent_size])
-        self.input_latent_goalstate = tf.placeholder(tf.float32,
-                                                     name="input_latent_goalstate",
-                                              shape=[self.test_batchsize] + self.ob_space)
+        if uses_goal_states:
+            self.input_latent_goalstate = tf.placeholder(
+                tf.float32, name="input_latent_goalstate",
+                shape=[self.test_batchsize, self.latent_size])
+        else:
+            self.input_latent_goalstate = None
+        self.default_encoder = self.build_encoder(self.input_state)
+        self.default_transition = self.build_transition(self.input_latent_state,
+                                                        self.input_actions)
+        self.default_goaler = self.build_goaler(self.input_latent_state,
+                                                self.input_latent_goalstate)
+        self.default_featurer = self.build_featurer(self.input_latent_state)
 
 #------------------------ MODEL SUBCOMPONENTS ----------------------------------
 
@@ -308,8 +317,6 @@ class EnvModel:
     # -------------- UTILITIES ---------------------------------------
 
     def encode(self, state):
-        if self.default_encoder is None:
-            self.default_encoder = self.build_encoder(self.input_states[0])
         single_run = state.ndim == len(self.ob_space)
         if single_run:
             nstate = np.zeros([self.test_batchsize] + self.ob_space)
@@ -325,10 +332,6 @@ class EnvModel:
         single_run = latent_state.ndim == 1
         actions = np.asarray(actions)
         if actions.ndim == 0: actions = np.expand_dims(actions, 1)
-        if self.default_transition is None:
-            self.default_transition = self.build_transition(
-                self.input_latent_state,
-                self.input_actions)
         if single_run:
             nlatent_state = np.zeros([self.test_batchsize, self.latent_size])
             nlatent_state[0] += latent_state
@@ -344,15 +347,12 @@ class EnvModel:
             nx = nx[0]
         return nx
 
-    def feature_from_encoding(self, latent_state):
+    def getfeatures(self, latent_state):
         single_run = latent_state.ndim == 1
         if single_run:
             nlatent_state = np.zeros([self.test_batchsize, self.latent_size])
             nlatent_state[0] += latent_state
             latent_state = nlatent_state
-        if self.default_featurer is None:
-            self.default_featurer = self.build_featurer(
-                self.input_latent_state)
         feed_dict = {self.input_latent_state: latent_state}
         f = U.get_session().run(self.default_featurer, feed_dict=feed_dict)
         if single_run:
@@ -365,8 +365,6 @@ class EnvModel:
             nlatent_state = np.zeros([self.test_batchsize, self.latent_size])
             nlatent_state[0] += latent_state
             latent_state = nlatent_state
-        if self.default_goaler is None:
-            self.default_goaler = self.build_goaler(latent_state, latent_goal)
         feed_dict = {self.input_latent_state: latent_state,
                      self.input_goalstate: latent_goal}
         g = U.get_session().run(self.default_goaler, feed_dict=feed_dict)

@@ -27,7 +27,6 @@ class ModelLearner:
             self.envmodel = EnvModel(env.observation_space,
                                      env.action_space,
                                      feature_shape,
-                                     max_horizon=config['maxhorizon'],
                                      latent_size=config['latent_size'],
                                      transition_stacked_dim=config['transition_stacked_dim'])
         self.global_step = tf.get_variable(
@@ -65,6 +64,7 @@ class ModelLearner:
                 goal_values=self.goal_values,
                 goal_states=self.goal_states,
                 seq_length=self.seq_length,
+                max_horizon=config['maxhorizon'],
                 x_to_f_ratio=int(config['force_latent_consistency']),
                 feature_regression=config['feature_regression'],
                 feature_softmax=config['feature_softmax']

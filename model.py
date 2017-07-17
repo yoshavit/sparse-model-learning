@@ -2,35 +2,32 @@ import numpy as np
 import tensorflow as tf
 import os
 from utils import tf_util as U
-from utils.gruacell import GRUACell
-from utils.multirnncell import ExposedMultiRNNCell
 
 class EnvModel:
-    def __init__(self, ob_space, ac_space, feature_shape, max_horizon=10,
+    def __init__(self, ob_space, ac_space, feature_shape,
                  latent_size=128, transition_stacked_dim=1):
         """Creates a model-learner framework
-        max_horizon is the # of unrolled steps, with 0 unrolled steps meaning
-        max_horizon = 0
         transition_stacked_dim is the number of stacked cells for each timestep
         in the transition model
         """
         self.ob_space = list(ob_space.shape)
         self.ac_space = ac_space.n
         self.encoder_scope = self.transition_scope = self.featurer_scope = self.goaler_scope = None
-        self.default_encoder = self.default_transition = self.default_featurer = None
-        self.max_horizon = max_horizon
+        self.default_encoder = self.default_transition = self.default_featurer = self.default_goaler = None
         self.latent_size = latent_size
         self.feature_shape = feature_shape
         self.transition_stacked_dim = transition_stacked_dim
-        # assert latent_size%transition_stacked_dim == 0, "latent_size must divide evenly into transition_stacked_dim components, but was {}, {}".format(latent_size, transition_stacked_dim)
 
-        # CURRENTLY NOT REALLY USED:
+        self.test_batchsize = 32
         self.input_state = tf.placeholder(tf.float32, name="input_state",
-                                          shape=[None] + self.ob_space)
-        self.input_action = tf.placeholder(tf.int32, name="input_action",
-                                           shape=[None])
+                                          shape=[self.test_batchsize] + self.ob_space)
+        self.input_actions = tf.placeholder(tf.int32, name="input_actions",
+                                           shape=[self.test_batchsize, None])
         self.input_latent_state = tf.placeholder(tf.float32, name="input_latent_state",
-                                                 shape=[None, self.latent_size])
+                                                 shape=[self.test_batchsize, self.latent_size])
+        self.input_latent_goalstate = tf.placeholder(tf.float32,
+                                                     name="input_latent_goalstate",
+                                              shape=[self.test_batchsize] + self.ob_space)
 
 #------------------------ MODEL SUBCOMPONENTS ----------------------------------
 
@@ -123,7 +120,7 @@ class EnvModel:
                 x = tf.concat([latent_state, latent_goal_state], axis=1)
             else:
                 x = latent_state
-            x = U.dense(x, 128, "dense1",
+            x = U.dense(x, 256, "dense1",
                         weight_init=U.normc_initializer())
             x = U.dense(x, 1, "dense2",
                         weight_init=U.normc_initializer())
@@ -139,6 +136,7 @@ class EnvModel:
              goal_states=None,
              goal_values=None,
              seq_length=None,
+             max_horizon=10,
              x_to_f_ratio=1,
              x_to_g_ratio=1,
              feature_regression=False,
@@ -225,23 +223,23 @@ class EnvModel:
             goal_diff = zero_out(
                 tf.nn.sigmoid_cross_entropy_with_logits(labels=g,
                                                         logits=g_hat),
-                seq_length, self.max_horizon)
+                seq_length, max_horizon)
             goal_loss = tf.reduce_mean(goal_diff, name="goal_loss")
 
         if feature_regression:
             feature_diff = zero_out(tf.squared_difference(f, f_hat), seq_length+1,
-                                    self.max_horizon + 1)
+                                    max_horizon + 1)
         elif feature_softmax:
             feature_diff = zero_out(
                 tf.nn.sparse_softmax_cross_entropy_with_logits(logits=f_hat,
                                                                labels=f),
-                seq_length + 1, self.max_horizon + 1)
+                seq_length + 1, max_horizon + 1)
         else:
             raise RuntimeError("Feature loss must be either regression or softmax")
 
         feature_loss = tf.reduce_mean(feature_diff, name="feature_loss")
         latent_diff = zero_out(tf.squared_difference(x_future, x_future_hat),
-                               seq_length, self.max_horizon)
+                               seq_length, max_horizon)
         latent_loss = tf.reduce_mean(latent_diff, name='latent_loss')
         if use_goals:
             total_loss = tf.identity(feature_loss + x_to_f_ratio*latent_loss +
@@ -272,7 +270,7 @@ class EnvModel:
                 for i, t in enumerate(
                     tf.split(tf.reduce_mean(feature_diff,
                                             axis=list(range(2, len(f.shape)))),
-                             self.max_horizon+1, axis=1))]
+                             max_horizon+1, axis=1))]
             # same, but latent state loss
             latent_losses = [
                 tf.div(
@@ -282,7 +280,7 @@ class EnvModel:
                     name="latent_loss%i"%(i+1))
                 for i, t in enumerate(
                     tf.split(tf.reduce_mean(latent_diff, axis=2),
-                             self.max_horizon, axis=1))]
+                             max_horizon, axis=1))]
             # same, but for goals
             if use_goals:
                 goal_losses = [
@@ -293,7 +291,7 @@ class EnvModel:
                         name="goals_loss%i"%(i+1))
                     for i, t in enumerate(
                         tf.split(goal_diff,
-                                 self.max_horizon, axis=1))]
+                                 max_horizon, axis=1))]
             else:
                 goal_losses = []
             timestep_summaries = []
@@ -312,42 +310,66 @@ class EnvModel:
     def encode(self, state):
         if self.default_encoder is None:
             self.default_encoder = self.build_encoder(self.input_states[0])
-        single_run = state.ndim == 3 # TODO: avoid specifically naming # dim
+        single_run = state.ndim == len(self.ob_space)
         if single_run:
-            state = np.expand_dims(state, 0)
+            nstate = np.zeros([self.test_batchsize] + self.ob_space)
+            nstate[0] += state
+            state = nstate
         feed_dict = {self.input_state: state}
         latent_state = U.get_session().run(self.default_encoder, feed_dict)
         if single_run:
             latent_state = latent_state[0]
         return latent_state
 
-    def advance_encoding(self, latent_state, action):
+    def stepforward(self, latent_state, actions):
         single_run = latent_state.ndim == 1
+        actions = np.asarray(actions)
+        if actions.ndim == 0: actions = np.expand_dims(actions, 1)
         if self.default_transition is None:
             self.default_transition = self.build_transition(
                 self.input_latent_state,
-                tf.expand_dims(self.input_action, axis=1))
+                self.input_actions)
         if single_run:
-            latent_state = np.expand_dims(latent_state, 0)
-            action = np.expand_dims(action, 0)
+            nlatent_state = np.zeros([self.test_batchsize, self.latent_size])
+            nlatent_state[0] += latent_state
+            latent_state = nlatent_state
+            nactions = np.zeros([self.test_batchsize, actions.shape[0]])
+            nactions[0] += actions
+            actions = nactions
         feed_dict = {self.input_latent_state: latent_state,
-                     self.input_action: action}
-        nx = U.get_session().run(self.default_transition, feed_dict=feed_dict)
+                     self.input_action: actions}
+        nxs = U.get_session().run(self.default_transition, feed_dict=feed_dict)
+        nx = nxs[:, -1]
         if single_run:
-            nx = tf.squeeze(nx, 0)
+            nx = nx[0]
         return nx
 
     def feature_from_encoding(self, latent_state):
         single_run = latent_state.ndim == 1
         if single_run:
-            latent_state = np.expand_dims(latent_state, axis=0)
+            nlatent_state = np.zeros([self.test_batchsize, self.latent_size])
+            nlatent_state[0] += latent_state
+            latent_state = nlatent_state
         if self.default_featurer is None:
             self.default_featurer = self.build_featurer(
                 self.input_latent_state)
-        if latent_state.ndim == 1:
-            latent_state = np.expand_dims(latent_state, 0)
         feed_dict = {self.input_latent_state: latent_state}
         f = U.get_session().run(self.default_featurer, feed_dict=feed_dict)
         if single_run:
-            f = np.squeeze(f, 0)
+            f = f[0]
         return f
+
+    def checkgoal(self, latent_state, latent_goal=None):
+        single_run = latent_state.ndim == 1
+        if single_run:
+            nlatent_state = np.zeros([self.test_batchsize, self.latent_size])
+            nlatent_state[0] += latent_state
+            latent_state = nlatent_state
+        if self.default_goaler is None:
+            self.default_goaler = self.build_goaler(latent_state, latent_goal)
+        feed_dict = {self.input_latent_state: latent_state,
+                     self.input_goalstate: latent_goal}
+        g = U.get_session().run(self.default_goaler, feed_dict=feed_dict)
+        if single_run:
+            g = g[0]
+        return g

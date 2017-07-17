@@ -54,10 +54,30 @@ args = parser.parse_args()
 """
 Things needed in config file:
 """
+mnist_config = {
+    'env': 'mnist-v0',
+    'logdir': args.logdir,
+    'stepsize': args.stepsize,
+    'maxsteps': args.maxsteps,
+    'feature_extractor': lambda state_info: [state_info],
+    'feature_shape': [1],
+    'feature_regression': True,
+    'feature_softmax': False,
+            # label_extractor - (optional) function from info['state'/'next_state']
+                # to label. If provided, output includes a fourth column, "labels"
+    'label_extractor': lambda state_info: [state_info],
+    'has_labels': True,
+    'latent_size': args.latentsize,
+    'maxhorizon': args.maxhorizon,
+    'force_latent_consistency': True,
+    'transition_stacked_dim': 1,
+    'minhorizon': 1,
+    'n_initial_games': 300,
+    'use_goalstates': True,
+}
 # simple multi-goal config
 mnist_multigoal_config = {
     'env': 'mnist-multigoal-v0',
-    'logdir': args.logdir,
     'stepsize': args.stepsize,
     'maxsteps': args.maxsteps,
     'feature_extractor': lambda state_info: [state_info],
@@ -76,7 +96,7 @@ mnist_multigoal_config = {
     'n_initial_games': 500,
     'use_goalstates': True,
 }
-config = mnist_multigoal_config
+config = mnist_config
 
 env = gym.make(config['env'])
 
@@ -126,9 +146,8 @@ with tf.Session() as sess:
     global_step = sess.run(ml.global_step)
     logger.info("Beginning training.")
     logger.info("To visualize, call:\ntensorboard --logdir={}".format(logdir))
-    print("At least here?")
     while (not args.maxsteps) or global_step < config['maxsteps']:
-        transition_data = ml.create_transition_dataset(n=200)
+        transition_data = ml.create_transition_dataset(n=20000)
         for batch in dataset.iterbatches(transition_data,
                                          batch_size=args.batchsize,
                                          shuffle=True):

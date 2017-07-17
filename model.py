@@ -31,23 +31,22 @@ class EnvModel:
                 shape=[self.test_batchsize, self.latent_size])
         else:
             self.input_latent_goalstate = None
-        self.default_encoder = self.build_encoder(self.input_state)
+        self.default_encoder = self.build_encoder(self.input_state,
+                                                  reuse=False)
         self.default_transition = self.build_transition(self.input_latent_state,
-                                                        self.input_actions)
+                                                        self.input_actions,
+                                                        reuse=False)
         self.default_goaler = self.build_goaler(self.input_latent_state,
-                                                self.input_latent_goalstate)
-        self.default_featurer = self.build_featurer(self.input_latent_state)
+                                                self.input_latent_goalstate,
+                                                reuse=False)
+        self.default_featurer = self.build_featurer(self.input_latent_state,
+                                                    reuse=False)
 
 #------------------------ MODEL SUBCOMPONENTS ----------------------------------
 
-    def build_encoder(self, input):
+    def build_encoder(self, input, reuse=True):
         x = input
-        if not self.encoder_scope:
-            self.encoder_scope = "encoder"
-            reuse = False
-        else:
-            reuse = True
-        with tf.variable_scope(self.encoder_scope, reuse=reuse) as scope:
+        with tf.variable_scope("encoder", reuse=reuse) as scope:
             self.encoder_scope = scope
             x = x/255.
             new_shape = list(map(lambda a: a if a!=None else -1,
@@ -63,7 +62,8 @@ class EnvModel:
                              weight_init=U.normc_initializer())
         return output
 
-    def build_transition(self, latent_state, actions, seq_length=None):
+    def build_transition(self, latent_state, actions, seq_length=None,
+                         reuse=True):
         '''
         Args:
             latent_state - n x latent_size latent encoding of state
@@ -75,13 +75,7 @@ class EnvModel:
         '''
         # n_factors = 512
         x = latent_state
-        if not self.transition_scope:
-            self.transition_scope = "transition"
-            reuse = False
-        else:
-            reuse = True
-
-        with tf.variable_scope(self.transition_scope, reuse=reuse) as scope:
+        with tf.variable_scope("transition", reuse=reuse) as scope:
             self.transition_scope = scope
             actions = tf.one_hot(actions, self.ac_space, axis=-1)
             # def cell():
@@ -103,13 +97,8 @@ class EnvModel:
                                                sequence_length=seq_length)
         return next_states
 
-    def build_featurer(self, latent_state):
-        if not self.featurer_scope:
-            self.featurer_scope = "featurer"
-            reuse = False
-        else:
-            reuse = True
-        with tf.variable_scope(self.featurer_scope, reuse=reuse) as scope:
+    def build_featurer(self, latent_state, reuse=True):
+        with tf.variable_scope("featurer", reuse=reuse) as scope:
             self.featurer_scope = scope
             feature_size = np.prod(self.feature_shape)
             output = U.dense(latent_state, feature_size, "dense1",
@@ -117,13 +106,8 @@ class EnvModel:
             output = tf.reshape(output, [-1] + self.feature_shape)
         return output
 
-    def build_goaler(self, latent_state, latent_goal_state=None):
-        if not self.goaler_scope:
-            self.goaler_scope = "goaler"
-            reuse = False
-        else:
-            reuse = True
-        with tf.variable_scope(self.goaler_scope, reuse=reuse) as scope:
+    def build_goaler(self, latent_state, latent_goal_state=None, reuse=True):
+        with tf.variable_scope("goaler", reuse=reuse) as scope:
             self.goaler_scope = scope
             if latent_goal_state is not None:
                 x = tf.concat([latent_state, latent_goal_state], axis=1)

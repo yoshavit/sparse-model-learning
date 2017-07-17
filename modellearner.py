@@ -23,12 +23,6 @@ class ModelLearner:
         maxhorizon = config['maxhorizon']
         self.summary_writer=summary_writer
         feature_shape = config['feature_shape']
-        with tf.variable_scope("envmodel"):
-            self.envmodel = EnvModel(env.observation_space,
-                                     env.action_space,
-                                     feature_shape,
-                                     latent_size=config['latent_size'],
-                                     transition_stacked_dim=config['transition_stacked_dim'])
         self.global_step = tf.get_variable(
             "global_step", [], tf.int32,
             initializer=tf.constant_initializer(0, dtype=tf.int32),
@@ -57,6 +51,11 @@ class ModelLearner:
         self.local_steps = 0
 
         with tf.variable_scope("train"):
+            self.envmodel = EnvModel(env.observation_space,
+                                     env.action_space,
+                                     feature_shape,
+                                     latent_size=config['latent_size'],
+                                     transition_stacked_dim=config['transition_stacked_dim'])
             self.loss, latents, var_list, base_summary, timestep_summary = self.envmodel.loss(
                 self.states,
                 self.actions,

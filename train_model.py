@@ -131,6 +131,7 @@ with tf.Session() as sess:
     else:
         logger.info("Initializing brand new network parameters.")
         sess.run(local_init_op)
+    sw.add_graph(sess.graph)
     global_step = sess.run(ml.global_step)
     logger.info("Beginning training.")
     logger.info("To visualize, call:\ntensorboard --logdir={}".format(logdir))
@@ -152,7 +153,7 @@ with tf.Session() as sess:
             ml.train_model(sess, *batch, show_embeddings=True)
             # By only saving during the embedding phase, our embedding isn't
             # overwritten by other saves
-            saver.save(sess, savepath, global_step)
+        saver.save(sess, savepath, global_step)
         global_step = sess.run(ml.global_step)
         ml.gather_gameplay_data(10)
 logger.info("Training complete!")

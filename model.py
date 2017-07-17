@@ -6,7 +6,8 @@ from utils import tf_util as U
 class EnvModel:
     def __init__(self, ob_space, ac_space, feature_shape,
                  uses_goal_states=True,
-                 latent_size=128, transition_stacked_dim=1):
+                 latent_size=128, transition_stacked_dim=1,
+                 feature_type="regression"):
         """Creates a model-learner framework
         transition_stacked_dim is the number of stacked cells for each timestep
         in the transition model
@@ -16,6 +17,8 @@ class EnvModel:
         self.encoder_scope = self.transition_scope = self.featurer_scope = self.goaler_scope = None
         self.latent_size = latent_size
         self.feature_shape = feature_shape
+        self.feature_type = feature_type
+        assert self.feature_type in ["regression", "softmax"], "Feature loss must be either regression or softmax, was {}".format(self.feature_type)
         self.transition_stacked_dim = transition_stacked_dim
 
         self.test_batchsize = 32
@@ -39,7 +42,7 @@ class EnvModel:
         self.default_goaler, _ = self.build_goaler(self.input_latent_state,
                                                 self.input_latent_goalstate,
                                                 reuse=False)
-        self.default_featurer = self.build_featurer(self.input_latent_state,
+        self.default_featurer, _ = self.build_featurer(self.input_latent_state,
                                                     reuse=False)
 
 #------------------------ MODEL SUBCOMPONENTS ----------------------------------
@@ -108,7 +111,11 @@ class EnvModel:
             x = U.dense(x, feature_size, "dense2",
                         weight_init=U.normc_initializer())
             output_logits = tf.reshape(x, [-1] + self.feature_shape)
-        return output_logits
+            if self.feature_type == "regression":
+                output = output_logits
+            elif self.feature_type == "softmax":
+                output = tf.softmax(output_logits)
+        return output, output_logits
 
     def build_goaler(self, latent_state, latent_goal_state=None, reuse=True):
         with tf.variable_scope("goaler", reuse=reuse) as scope:
@@ -206,7 +213,7 @@ class EnvModel:
         x_future_flattened_hat = tf.reshape(x_future_hat, [-1, self.latent_size])
         x_hat = tf.concat([tf.expand_dims(x0, axis=1), x_future_hat], axis=1)
         x_flattened_hat = tf.reshape(x_hat, [-1, self.latent_size])
-        f_flattened_hat_logits = self.build_featurer(x_flattened_hat)
+        _, f_flattened_hat_logits = self.build_featurer(x_flattened_hat)
         f_hat_logits = tf.reshape(f_flattened_hat_logits, [-1, T+1] +
                                   self.feature_shape)
         if use_goals:
@@ -225,16 +232,16 @@ class EnvModel:
                 seq_length, max_horizon)
             goal_loss = tf.reduce_mean(goal_diff, name="goal_loss")
 
-        if feature_regression:
+        if self.feature_type == "regression":
             feature_diff = zero_out(tf.squared_difference(f, f_hat_logits), seq_length+1,
                                     max_horizon + 1)
-        elif feature_softmax:
+        elif self.feature_type == "softmax":
             feature_diff = zero_out(
                 tf.nn.sparse_softmax_cross_entropy_with_logits(logits=f_hat_logits,
                                                                labels=f),
                 seq_length + 1, max_horizon + 1)
         else:
-            raise RuntimeError("Feature loss must be either regression or softmax")
+            raise RuntimeError()
 
         feature_loss = tf.reduce_mean(feature_diff, name="feature_loss")
         latent_diff = zero_out(tf.squared_difference(x_future, x_future_hat),

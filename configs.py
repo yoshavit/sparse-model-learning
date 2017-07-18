@@ -40,7 +40,7 @@ mnist_config_featureless = {
     'n_initial_games': 300,
     'use_goalstates': True,
 }
-config_index['mnist_simple_config'] = mnist_config_featureless
+config_index['mnist_simple'] = mnist_config_featureless
 # simple multi-goal config (no features)
 mnist_multigoal_config_featureless = {
     'env': 'mnist-multigoal-v0',
@@ -63,7 +63,7 @@ mnist_multigoal_config_featureless = {
     'n_initial_games': 300,
     'use_goalstates': True,
 }
-config_index['mnist_multigoal_config'] = mnist_multigoal_config_featureless
+config_index['mnist_multigoal'] = mnist_multigoal_config_featureless
 # simplified mnist-9game config (fully observable)
 mnist_9game_simple_wfeatures = {
     'env': 'mnist-9game-simple-v0',

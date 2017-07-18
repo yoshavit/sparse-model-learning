@@ -36,16 +36,16 @@ class ModelLearner:
         self.goal_states = tf.placeholder(tf.float32, shape=[None] +
                                           list(env.observation_space.shape),
                                           name="goal_states")
-        if config['feature_regression']:
+        if config['feature_type'] == 'regression':
             self.features = tf.placeholder(tf.float32,
                                            shape=[None, maxhorizon+1] + feature_shape,
                                            name="features")
-        elif config['feature_softmax']:
+        elif config['feature_type'] == 'softmax':
             self.features = tf.placeholder(tf.int32,
                                            shape=[None,maxhorizon+1] + feature_shape[:-1],
                                            name="features")
         else:
-            raise RuntimeError("Feature loss must be either regression or softmax")
+            raise RuntimeError("Feature loss type must be either regression or softmax")
         self.seq_length = tf.placeholder(tf.int32, shape=[None, 1], name="seq_length")
         inc_step = self.global_step.assign_add(tf.shape(self.states)[0])
         self.local_steps = 0

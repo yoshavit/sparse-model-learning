@@ -64,9 +64,8 @@ class ModelLearner:
                 goal_states=self.goal_states,
                 seq_length=self.seq_length,
                 max_horizon=config['maxhorizon'],
-                x_to_f_ratio=int(config['force_latent_consistency']),
-                feature_regression=config['feature_regression'],
-                feature_softmax=config['feature_softmax']
+                x_to_f_ratio=config['x_to_f_ratio'],
+                x_to_g_ratio=config['x_to_g_ratio'],
             )
             grads = tf.gradients(self.loss, var_list)
             grads, _ = tf.clip_by_global_norm(grads, 40.0)

@@ -98,7 +98,6 @@ class EnvModel:
                                                actions,
                                                initial_state=initial_state,
                                                sequence_length=seq_length)
-            next_states = tf.nn.sigmoid(next_states)
         return next_states
 
     def build_featurer(self, latent_state, reuse=True):
@@ -144,9 +143,7 @@ class EnvModel:
              seq_length=None,
              max_horizon=10,
              x_to_f_ratio=1,
-             x_to_g_ratio=1,
-             feature_regression=False,
-             feature_softmax=False):
+             x_to_g_ratio=1):
         '''
         Estimates MSE prediction loss for features given states, actions, and a
         true feature_extractor. REQUIRED: T = self.max_horizon >= t > 0
@@ -248,7 +245,7 @@ class EnvModel:
                                seq_length, max_horizon)
         latent_loss = tf.reduce_mean(latent_diff, name='latent_loss')
         if use_goals:
-            total_loss = tf.identity(feature_loss + x_to_f_ratio*latent_loss +
+            total_loss = tf.identity(latent_loss + x_to_f_ratio*feature_loss +
                                      x_to_g_ratio*goal_loss,
                                      name="overall_loss")
         else:

@@ -4,6 +4,7 @@ import gym
 import gym_mnist
 import tensorflow as tf
 import logging
+import configs
 from utils import dataset
 from modellearner import ModelLearner
 
@@ -29,88 +30,34 @@ parser = argparse.ArgumentParser(description="Trains a model_learner on the MNIS
 parser.add_argument('env', default="mnist-v0", help="Name of environment to"
                     "be trained on. Examples: 'mnist-v0', 'blockwalker-v0',"
                     "and 'blockwalker-multicolored-v0'")
-parser.add_argument('--logdir', help="Path to log directory, relative to ./data/[env]")
-parser.add_argument('--run-id', help="Log suffix pointing to experiment to"
-                    "resume, e.g. if was run--05 arg should be run--05",
-                    type=str)
-parser.add_argument('--show-embeddings', help="Project model progress using labelled embeddings",
+parser.add_argument('--logdir', default=None, help="Path to previously-created log"
+                    "directory relative to ./, for resuming training")
+parser.add_argument('--logname', default="default",
+                    help="Experiment prefix for log directory, relative to ./data/[env]")
+parser.add_argument('--configid', help="Config name string to use when "
+                    "starting new training. Can be one of:\n"
+                    "{}".format(list(configs.config_index.keys())))
+# parser.add_argument('--run-id', help="Log suffix pointing to experiment to"
+                    # "resume, e.g. if was run--05 arg should be run--05",
+                    # type=str)
+parser.add_argument('--show-embeddings',
+                    help="Project model progress using labelled embeddings",
                     action='store_true')
-# parser.add_argument('--ignore-latent-consistency',
-                    # help="Penalize latent encodings' consistency with each other via MSE",
-                    # action="store_true")
-parser.add_argument('-batchsize', help="Batch size for learning", type=int,
-                    default=16)
-parser.add_argument('--maxhorizon', help="Max number of steps to simulate"
-                    "forward (1 means 1 transition)", type=int, default=5)
-parser.add_argument('--maxsteps', type=int, default=10000000, help="Number of"
-                    "steps to train (if 0, trains until manually halted)")
-parser.add_argument('-stepsize', type=float, default=1e-4,
-                    help="train step size")
-parser.add_argument('--latentsize', type=int, default=64,
-                    help="Number of latent dimensions used to encode the state")
-
 args = parser.parse_args()
-# ----------------------------------------------
-"""
-Things needed in config file:
-"""
-mnist_config = {
-    'env': 'mnist-v0',
-    'logdir': args.logdir,
-    'stepsize': args.stepsize,
-    'maxsteps': args.maxsteps,
-    'feature_extractor': lambda state_info: [state_info],
-    'feature_shape': [1],
-    'feature_regression': True,
-    'feature_softmax': False,
-            # label_extractor - (optional) function from info['state'/'next_state']
-                # to label. If provided, output includes a fourth column, "labels"
-    'label_extractor': lambda state_info: [state_info],
-    'has_labels': True,
-    'latent_size': args.latentsize,
-    'maxhorizon': args.maxhorizon,
-    'force_latent_consistency': True,
-    'transition_stacked_dim': 1,
-    'minhorizon': 1,
-    'n_initial_games': 300,
-    'use_goalstates': True,
-}
-# simple multi-goal config
-mnist_multigoal_config = {
-    'env': 'mnist-multigoal-v0',
-    'stepsize': args.stepsize,
-    'maxsteps': args.maxsteps,
-    'feature_extractor': lambda state_info: [state_info],
-    'feature_shape': [1],
-    'feature_regression': True,
-    'feature_softmax': False,
-            # label_extractor - (optional) function from info['state'/'next_state']
-                # to label. If provided, output includes a fourth column, "labels"
-    'label_extractor': lambda state_info: [state_info],
-    'has_labels': True,
-    'latent_size': args.latentsize,
-    'maxhorizon': args.maxhorizon,
-    'force_latent_consistency': True,
-    'transition_stacked_dim': 1,
-    'minhorizon': 1,
-    'n_initial_games': 500,
-    'use_goalstates': True,
-}
-config = mnist_config
+
+scriptdir = os.path.dirname(os.path.realpath(__file__))
+if args.logdir is not None:
+    logdir = os.path.join(scriptdir, args.logdir)
+    config = configs.load_config(logdir)
+else:
+    config = configs.config_index[args.configid]
+    logdir = os.path.join(scriptdir, 'data', config['env'], args.logname, 'train')
+    logdir = increment_path(os.path.join(logdir, "run"))
+    tf.gfile.MakeDirs(logdir)
+    configs.save_config(config, logdir)
+assert args.env == config['env'], "Parsed env and config env do not match: {}, {}".format(args.env, config['env'])
 
 env = gym.make(config['env'])
-# ------- 9-game features---------------
-# feature_extractor = lambda info: info
-# feature_shape = [3, 3, 9]
-# label_extractor = lambda info: info[2][0]
-# feature_regression = False
-# feature_softmax = True
-# ----------------------------------
-logdir = os.path.join('data', config['env'], config['logdir'], 'train')
-if args.run_id:
-    logdir = os.path.join(logdir, args.run_id)
-else: # increment until we get a new id
-    logdir = increment_path(os.path.join(logdir, "run"))
 logger.info("Logging results to {}".format(logdir))
 sw = tf.summary.FileWriter(logdir)
 ml = ModelLearner(env,
@@ -122,7 +69,6 @@ logger.info("Gathering initial gameplay data!")
 ml.gather_gameplay_data(config['n_initial_games'])
 restoring_saver = tf.train.Saver(var_list=[var for var in tf.global_variables()
                                            if var.name[:9] != "embedding"])
-local_init_op = tf.global_variables_initializer()
 restore_path = tf.train.latest_checkpoint(logdir)
 with tf.Session() as sess:
     if restore_path is not None:
@@ -130,15 +76,15 @@ with tf.Session() as sess:
         restoring_saver.restore(sess, restore_path)
     else:
         logger.info("Initializing brand new network parameters.")
-        sess.run(local_init_op)
+        sess.run(tf.global_variables_initializer())
     sw.add_graph(sess.graph)
     global_step = sess.run(ml.global_step)
     logger.info("Beginning training.")
     logger.info("To visualize, call:\ntensorboard --logdir={}".format(logdir))
-    while (not args.maxsteps) or global_step < config['maxsteps']:
+    while (not config['maxsteps']) or global_step < config['maxsteps']:
         transition_data = ml.create_transition_dataset(n=20000)
         for batch in dataset.iterbatches(transition_data,
-                                         batch_size=args.batchsize,
+                                         batch_size=config['batchsize'],
                                          shuffle=True):
             ml.train_model(sess, *batch)
         if args.show_embeddings:

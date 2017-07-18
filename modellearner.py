@@ -50,29 +50,29 @@ class ModelLearner:
         inc_step = self.global_step.assign_add(tf.shape(self.states)[0])
         self.local_steps = 0
 
-        with tf.variable_scope("train"):
-            self.envmodel = EnvModel(env.observation_space,
-                                     env.action_space,
-                                     feature_shape,
-                                     latent_size=config['latent_size'],
-                                     transition_stacked_dim=config['transition_stacked_dim'])
-            self.loss, latents, var_list, base_summary, timestep_summary = self.envmodel.loss(
-                self.states,
-                self.actions,
-                self.features,
-                goal_values=self.goal_values,
-                goal_states=self.goal_states,
-                seq_length=self.seq_length,
-                max_horizon=config['maxhorizon'],
-                x_to_f_ratio=config['x_to_f_ratio'],
-                x_to_g_ratio=config['x_to_g_ratio'],
-            )
-            grads = tf.gradients(self.loss, var_list)
-            grads, _ = tf.clip_by_global_norm(grads, 40.0)
-            grads_and_vars = list(zip(grads, var_list))
-            self.train_op = tf.group(
-                tf.train.AdamOptimizer(config['stepsize']).apply_gradients(grads_and_vars),
-                inc_step)
+        self.envmodel = EnvModel(env.observation_space,
+                                 env.action_space,
+                                 feature_shape,
+                                 latent_size=config['latent_size'],
+                                 transition_stacked_dim=config['transition_stacked_dim'],
+                                 feature_type=config['feature_type'])
+        self.loss, latents, var_list, base_summary, timestep_summary = self.envmodel.loss(
+            self.states,
+            self.actions,
+            self.features,
+            goal_values=self.goal_values,
+            goal_states=self.goal_states,
+            seq_length=self.seq_length,
+            max_horizon=config['maxhorizon'],
+            x_to_f_ratio=config['x_to_f_ratio'],
+            x_to_g_ratio=config['x_to_g_ratio'],
+        )
+        grads = tf.gradients(self.loss, var_list)
+        grads, _ = tf.clip_by_global_norm(grads, 40.0)
+        grads_and_vars = list(zip(grads, var_list))
+        self.train_op = tf.group(
+            tf.train.AdamOptimizer(config['stepsize']).apply_gradients(grads_and_vars),
+            inc_step)
         with tf.variable_scope("embedding"):
             self.num_embed_vectors = 1024
             latent_tensors = [tf.squeeze(tensor, axis=1)

@@ -1,15 +1,9 @@
 import os
 import argparse
-import gym
-import gym_mnist
-import tensorflow as tf
 import logging
-import configs
-from utils import dataset
-from modellearner import ModelLearner
-
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+import configs
 
 def increment_path(origpath):
     subscript = None
@@ -27,24 +21,17 @@ def increment_path(origpath):
     return newpath
 
 parser = argparse.ArgumentParser(description="Trains a model_learner on the MNIST game.")
-parser.add_argument('env', default="mnist-v0", help="Name of environment to"
-                    "be trained on. Examples: 'mnist-v0', 'blockwalker-v0',"
-                    "and 'blockwalker-multicolored-v0'")
 parser.add_argument('--logdir', default=None, help="Path to previously-created log"
                     "directory relative to ./, for resuming training")
 parser.add_argument('--logname', default="default",
-                    help="Experiment prefix for log directory, relative to ./data/[env]")
+                    help="Experiment prefix for log directory, relative to ./data/env")
 parser.add_argument('--configid', help="Config name string to use when "
                     "starting new training. Can be one of:\n"
                     "{}".format(list(configs.config_index.keys())))
-# parser.add_argument('--run-id', help="Log suffix pointing to experiment to"
-                    # "resume, e.g. if was run--05 arg should be run--05",
-                    # type=str)
 parser.add_argument('--show-embeddings',
                     help="Project model progress using labelled embeddings",
                     action='store_true')
 args = parser.parse_args()
-
 scriptdir = os.path.dirname(os.path.realpath(__file__))
 if args.logdir is not None:
     logdir = os.path.join(scriptdir, args.logdir)
@@ -53,9 +40,13 @@ else:
     config = configs.config_index[args.configid]
     logdir = os.path.join(scriptdir, 'data', config['env'], args.logname, 'train')
     logdir = increment_path(os.path.join(logdir, "run"))
-    tf.gfile.MakeDirs(logdir)
+    os.makedirs(logdir)
     configs.save_config(config, logdir)
-assert args.env == config['env'], "Parsed env and config env do not match: {}, {}".format(args.env, config['env'])
+
+import gym
+import gym_mnist
+import tensorflow as tf
+from modellearner import ModelLearner
 
 env = gym.make(config['env'])
 logger.info("Logging results to {}".format(logdir))
@@ -81,6 +72,7 @@ with tf.Session() as sess:
     global_step = sess.run(ml.global_step)
     logger.info("Beginning training.")
     logger.info("To visualize, call:\ntensorboard --logdir={}".format(logdir))
+    from utils import dataset
     while (not config['maxsteps']) or global_step < config['maxsteps']:
         transition_data = ml.create_transition_dataset(n=20000)
         for batch in dataset.iterbatches(transition_data,

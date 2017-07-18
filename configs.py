@@ -25,8 +25,7 @@ mnist_config_featureless = {
     'maxsteps': 10000000,
     'feature_extractor': lambda state_info: [state_info == 0],
     'feature_shape': [1],
-    'feature_regression': True,
-    'feature_softmax': False,
+    'feature_type': 'softmax',
             # label_extractor - (optional) function from info['state'/'next_state']
                 # to label. If provided, output includes a fourth column, "labels"
     'label_extractor': lambda state_info: [state_info],
@@ -49,8 +48,7 @@ mnist_multigoal_config_featureless = {
     'maxsteps': 10000000,
     'feature_extractor': lambda state_info: [state_info == 0],
     'feature_shape': [1],
-    'feature_regression': True,
-    'feature_softmax': False,
+    'feature_type': 'softmax',
             # label_extractor - (optional) function from info['state'/'next_state']
                 # to label. If provided, output includes a fourth column, "labels"
     'label_extractor': lambda state_info: [state_info],
@@ -73,8 +71,7 @@ mnist_9game_simple_wfeatures = {
     'maxsteps': 10000000,
     'feature_extractor': lambda state_info: state_info,
     'feature_shape': [3, 3, 9],
-    'feature_regression': False,
-    'feature_softmax': True,
+    'feature_type': 'softmax',
             # label_extractor - (optional) function from info['state'/'next_state']
                 # to label. If provided, output includes a fourth column, "labels"
     'label_extractor': lambda state_info: state_info[2][0],

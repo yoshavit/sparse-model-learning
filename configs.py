@@ -92,9 +92,9 @@ config_index['mnist_multigoal_wfeatures'] = mnist_multigoal_config_wfeature
 mnist_9game_simple_wfeatures = {
     'env': 'mnist-9game-simple-v0',
     'stepsize': 1e-4,
-    'maxsteps': 10000000,
+    'maxsteps': 30000000,
     'feature_extractor': lambda state_info: state_info,
-    'feature_shape': [3, 3, 9],
+    'feature_shape': [3, 3, 3],
     'feature_type': 'softmax',
             # label_extractor - (optional) function from info['state'/'next_state']
                 # to label. If provided, output includes a fourth column, "labels"

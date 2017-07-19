@@ -35,9 +35,11 @@ args = parser.parse_args()
 scriptdir = os.path.dirname(os.path.realpath(__file__))
 if args.logdir is not None:
     logdir = os.path.join(scriptdir, args.logdir)
+    # logdir = args.logdir
     config = configs.load_config(logdir)
 else:
     config = configs.config_index[args.configid]
+    # logdir = os.path.join('data', config['env'], args.logname, 'train')
     logdir = os.path.join(scriptdir, 'data', config['env'], args.logname, 'train')
     logdir = increment_path(os.path.join(logdir, "run"))
     os.makedirs(logdir)

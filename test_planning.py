@@ -25,7 +25,9 @@ envmodel = EnvModel(env.observation_space,
                     latent_size=config['latent_size'],
                     transition_stacked_dim=config['transition_stacked_dim'],
                     feature_type=config['feature_type'])
-restore_path = tf.train.latest_checkpoint(args.logdir)
+from utils.latest_checkpoint_unsafe import latest_checkpoint
+# restore_path = tf.train.latest_checkpoint(args.logdir)
+restore_path = latest_checkpoint(args.logdir)
 # from tensorflow.python import pywrap_tensorflow
 # reader = pywrap_tensorflow.NewCheckpointReader(restore_path)
 # var_to_shape_map = reader.get_variable_to_shape_map()

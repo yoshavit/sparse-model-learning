@@ -1,6 +1,5 @@
 import numpy as np
 import tensorflow as tf
-import os
 from utils import tf_util as U
 
 class EnvModel:
@@ -263,29 +262,37 @@ class EnvModel:
                                                               goal_loss))
 
         #timestep summaries
-        with tf.variable_scope("timestep"):
+
+        timestep_summaries = []
+        with tf.variable_scope("features"):
             # feature loss in each timestep, averaged over each nonzero feature
             feature_losses = [
                 tf.div(
                     tf.reduce_sum(tf.squeeze(t, axis=1), axis=0),
                     tf.count_nonzero(tf.squeeze(t, axis=1), axis=0,
-                                     dtype=tf.float32) + 1e-12, # to avoid dividing by 0
-                    name="feature_loss%i"%i)
-                for i, t in enumerate(
-                    tf.split(tf.reduce_mean(feature_diff,
+                                     dtype=tf.float32) + 1e-12 # to avoid dividing by 0
+                    )
+                for t in tf.split(tf.reduce_mean(feature_diff,
                                             axis=list(range(2, len(f.shape)))),
-                             max_horizon+1, axis=1))]
+                             max_horizon+1, axis=1)]
+            timestep_summaries.extend([tf.summary.scalar(
+                "loss%i"%i, t) for i, t in enumerate(feature_losses)])
+
+        with tf.variable_scope("latents"):
             # same, but latent state loss
             latent_losses = [
                 tf.div(
                     tf.reduce_sum(tf.squeeze(t, axis=1), axis=0),
                     tf.count_nonzero(tf.squeeze(t, axis=1), axis=0,
                                      dtype=tf.float32) + 1e-12,
-                    name="latent_loss%i"%(i+1))
+                    name="loss%i"%(i+1))
                 for i, t in enumerate(
                     tf.split(tf.reduce_mean(latent_diff, axis=2),
                              max_horizon, axis=1))]
-            # same, but for goals
+            timestep_summaries.extend([tf.summary.scalar(
+                "loss%i"%i, t) for i, t in enumerate(latent_losses)])
+        # same, but for goals
+        with tf.variable_scope("goals"):
             if use_goals:
                 goal_losses = [
                     tf.div(
@@ -298,13 +305,8 @@ class EnvModel:
                                  max_horizon, axis=1))]
             else:
                 goal_losses = []
-            timestep_summaries = []
-            for loss in feature_losses + latent_losses + goal_losses:
-                _, loss_name = os.path.split(loss.name)
-                timestep_summaries.extend([
-                    tf.summary.scalar(loss_name, loss),
-                    tf.summary.histogram(loss_name, loss)
-                ])
+            timestep_summaries.extend([tf.summary.scalar(
+                "loss%i"%i, t) for i, t in enumerate(goal_losses)])
         var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, tf.get_variable_scope().name)
         return total_loss, x_hat, var_list, tf.summary.merge(summaries),\
                 tf.summary.merge(timestep_summaries)

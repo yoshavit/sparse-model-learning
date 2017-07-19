@@ -252,14 +252,15 @@ class EnvModel:
             total_loss = tf.identity(feature_loss + x_to_f_ratio*latent_loss,
                                      name="overall_loss")
 
-        summaries.extend([
-            tf.summary.scalar('overall feature loss', feature_loss),
-            tf.summary.scalar('overall latent loss', latent_loss),
-            tf.summary.scalar('overall loss', total_loss),
-            tf.summary.image('input', s0),
-        ])
-        if use_goals: summaries.append(tf.summary.scalar('overall goal loss',
-                                                          goal_loss))
+        with tf.variable_scope("overall"):
+            summaries.extend([
+                tf.summary.scalar('feature loss', feature_loss),
+                tf.summary.scalar('latent loss', latent_loss),
+                tf.summary.scalar('loss', total_loss),
+                tf.summary.image('input', s0),
+            ])
+            if use_goals: summaries.append(tf.summary.scalar('goal loss',
+                                                              goal_loss))
 
         #timestep summaries
         with tf.variable_scope("timestep"):

@@ -24,7 +24,7 @@ mnist_config_featureless = {
     'stepsize': 1e-4,
     'maxsteps': 10000000,
     'feature_extractor': lambda state_info: [state_info == 0],
-    'feature_shape': [1],
+    'feature_shape': [1, 2], # one feature, with two possible classes
     'feature_type': 'softmax',
             # label_extractor - (optional) function from info['state'/'next_state']
                 # to label. If provided, output includes a fourth column, "labels"
@@ -47,7 +47,7 @@ mnist_multigoal_config_featureless = {
     'stepsize': 1e-4,
     'maxsteps': 10000000,
     'feature_extractor': lambda state_info: [state_info == 0],
-    'feature_shape': [1],
+    'feature_shape': [1, 2], # one feature, with two possible classes
     'feature_type': 'softmax',
             # label_extractor - (optional) function from info['state'/'next_state']
                 # to label. If provided, output includes a fourth column, "labels"

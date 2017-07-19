@@ -6,7 +6,6 @@ import logging
 from model import EnvModel
 import configs
 import numpy as np
-import random
 from utils.latent_visualizer import LatentVisualizer
 from utils.getch import getch
 import cv2
@@ -50,13 +49,15 @@ with tf.Session() as sess:
     use_latent_visualizer = isinstance(coreenv, gym_mnist.envs.MNISTEnv)
     if use_latent_visualizer:
         lv = LatentVisualizer()
-        states = []
-        latents = []
-        for _ in range(100):
-            i = random.randint(10)
-            s = coreenv._get_image_from_digit(i)
+        states = np.zeros([0] + list(env.observation_space.shape))
+        latents = np.zeros([0, config['latent_size']])
+        for _ in range(4):
+            arr = np.random.randint(10, size=[32])
+            s = np.stack([coreenv._get_image_from_digit(i) for i in arr],
+                         axis=0)
             x = envmodel.encode(s)
-            states.append(s); latents.append(x)
+            states = np.concatenate([states, s], axis=0)
+            latents = np.concatenate([latents, x], axis=0)
         states = np.stack(states, axis=0)
         latents = np.stack(latents, axis=0)
         lv.add_images(states, latents)
@@ -66,11 +67,13 @@ with tf.Session() as sess:
     cv2.namedWindow("envmodel_state", cv2.WINDOW_NORMAL)
     for _ in range(30):
         s = env.reset()
-        cv2.imshow("env", s)
+        cv2.imshow("env_state", cv2.resize(s, None, fx=5, fy=5))
         x = envmodel.encode(s)
         done = False
         print("New game! Press q to quit")
+        i = 0
         while not done:
+            i += 1
             action = getch()
             if action == 'q':
                 exit()
@@ -79,16 +82,17 @@ with tf.Session() as sess:
                 continue # next loop iteration
             else:
                 action = "wasd".find(action)
-                print("Action: {}".format(action))
             s, rew, done, info = env.step(action)
             x = envmodel.stepforward(x, action)
             if use_latent_visualizer:
                 x_visualized = lv.get_nearest_image(x)
-                cv2.imshow("envmodel_state", x_visualized)
+                cv2.imshow("envmodel_state", cv2.resize(x_visualized, None,
+                                                        fx=5, fy=5))
             gs = info['goal_state']
             gx = envmodel.encode(gs)
             rew_guess = envmodel.checkgoal(x, gx)
-            cv2.imshow("env_state", s)
-            cv2.imshow("env_goal", gs)
-            print("True goal: {}, estimated goal: {}".format(rew, rew_guess))
-            cv2.waitKey(1000)
+            cv2.imshow("env_state", cv2.resize(s, None,
+                                               fx=5, fy=5))
+            cv2.imshow("env_goal", cv2.resize(gs, None,
+                                              fx=5, fy=5))
+            print("Step {}, true goal: {}, estimated goal: {:0.3}".format(i, rew, rew_guess))

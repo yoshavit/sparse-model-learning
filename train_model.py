@@ -81,7 +81,7 @@ with tf.Session() as sess:
             ml.train_model(sess, *batch)
         if args.show_embeddings:
             # Train a single step of ml.num_embed_vectors instances
-            logger.info("Creating embedding...")
+            logger.info("Saving weights, creating embedding...")
             # create a dataset of max_horizon length transitions
             transition_data = ml.create_transition_dataset(n=ml.num_embed_vectors,
                                                            variable_steps=False)
@@ -91,6 +91,8 @@ with tf.Session() as sess:
             ml.train_model(sess, *batch, show_embeddings=True)
             # By only saving during the embedding phase, our embedding isn't
             # overwritten by other saves
+        else:
+            logger.info("Saving weights...")
         saver.save(sess, savepath, global_step)
         global_step = sess.run(ml.global_step)
         ml.gather_gameplay_data(10)

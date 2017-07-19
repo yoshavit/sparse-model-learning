@@ -113,7 +113,7 @@ class EnvModel:
             if self.feature_type == "regression":
                 output = output_logits
             elif self.feature_type == "softmax":
-                output = tf.softmax(output_logits)
+                output = tf.nn.softmax(output_logits)
         return output, output_logits
 
     def build_goaler(self, latent_state, latent_goal_state=None, reuse=True):

@@ -48,14 +48,15 @@ with tf.Session() as sess:
     # Prepare a group of images (3 from each class, 10 classes)
     coreenv = env.unwrapped
     # NOTE: only valid for basic mnist environments
-    use_latent_visualizer = isinstance(coreenv, gym_mnist.envs.MNISTEnv)
+    # use_latent_visualizer = isinstance(coreenv, gym_mnist.envs.MNISTEnv)
+    use_latent_visualizer = hasattr(coreenv, '_get_random_obs')
     if use_latent_visualizer:
         lv = LatentVisualizer()
         states = np.zeros([0] + list(env.observation_space.shape))
         latents = np.zeros([0, config['latent_size']])
-        for _ in range(4):
-            arr = np.random.randint(10, size=[32])
-            s = np.stack([coreenv._get_image_from_digit(i) for i in arr],
+        logger.info("Generating random images and latents")
+        for _ in range(300):
+            s = np.stack([coreenv._get_random_obs() for _ in range(32)],
                          axis=0)
             x = envmodel.encode(s)
             states = np.concatenate([states, s], axis=0)
@@ -71,6 +72,10 @@ with tf.Session() as sess:
         s = env.reset()
         cv2.imshow("env_state", cv2.resize(s, None, fx=5, fy=5))
         x = envmodel.encode(s)
+        if use_latent_visualizer:
+            x_visualized = lv.get_nearest_image(x)
+            cv2.imshow("envmodel_state", cv2.resize(x_visualized, None,
+                                                    fx=5, fy=5))
         done = False
         print("New game! Press q to quit")
         i = 0

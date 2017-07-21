@@ -37,6 +37,7 @@ mnist_config_featureless = {
     'transition_stacked_dim': 1,
     'minhorizon': 2,
     'batchsize': 16,
+    'sigmoid_latents': False,
     'n_initial_games': 300,
     'use_goalstates': True,
 }
@@ -60,13 +61,14 @@ mnist_multigoal_config_featureless = {
     'x_to_g_ratio': 1,
     'batchsize': 16,
     'transition_stacked_dim': 1,
+    'sigmoid_latents': False,
     'minhorizon': 2,
     'n_initial_games': 300,
     'use_goalstates': True,
 }
 config_index['mnist_multigoal'] = mnist_multigoal_config_featureless
 # simple multi-goal config (w features)
-mnist_multigoal_config_wfeature = {
+mnist_multigoal_config_wfeature_wsig = {
     'env': 'mnist-multigoal-v0',
     'stepsize': 1e-4,
     'maxsteps': 10000000,
@@ -83,16 +85,17 @@ mnist_multigoal_config_wfeature = {
     'x_to_g_ratio': 1,
     'batchsize': 16,
     'transition_stacked_dim': 1,
+    'sigmoid_latents': False,
     'minhorizon': 2,
     'n_initial_games': 300,
     'use_goalstates': True,
 }
-config_index['mnist_multigoal_wfeatures'] = mnist_multigoal_config_wfeature
+config_index['mnist_multigoal_wfeat_wsig'] = mnist_multigoal_config_wfeature_wsig
 # simplified mnist-9game config (fully observable)
 mnist_9game_simple_wfeatures = {
     'env': 'mnist-9game-simple-v0',
     'stepsize': 1e-4,
-    'maxsteps': 30000000,
+    'maxsteps': 10000000,
     'feature_extractor': lambda state_info: state_info,
     'feature_shape': [3, 3, 3],
     'feature_type': 'softmax',
@@ -106,6 +109,7 @@ mnist_9game_simple_wfeatures = {
     'x_to_g_ratio': 1,
     'batchsize': 16,
     'transition_stacked_dim': 1,
+    'sigmoid_latents': False,
     'minhorizon': 2,
     'n_initial_games': 300,
     'use_goalstates': True,

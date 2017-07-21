@@ -55,6 +55,7 @@ class ModelLearner:
                                  feature_shape,
                                  latent_size=config['latent_size'],
                                  transition_stacked_dim=config['transition_stacked_dim'],
+                                 sigmoid_latents=config['sigmoid_latents'],
                                  feature_type=config['feature_type'])
         self.loss, latents, var_list, base_summary, timestep_summary = self.envmodel.loss(
             self.states,

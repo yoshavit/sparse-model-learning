@@ -6,7 +6,7 @@ class EnvModel:
     def __init__(self, ob_space, ac_space, feature_shape,
                  uses_goal_states=True,
                  latent_size=128, transition_stacked_dim=1,
-                 feature_type="regression"):
+                 feature_type="regression", sigmoid_latents=True):
         """Creates a model-learner framework
         transition_stacked_dim is the number of stacked cells for each timestep
         in the transition model
@@ -15,6 +15,7 @@ class EnvModel:
         self.ac_space = ac_space.n
         self.encoder_scope = self.transition_scope = self.featurer_scope = self.goaler_scope = None
         self.latent_size = latent_size
+        self.sigmoid_latents = sigmoid_latents # pass latents through sigmoid
         self.feature_shape = feature_shape
         self.feature_type = feature_type
         assert self.feature_type in ["regression", "softmax"], "Feature loss must be either regression or softmax, was {}".format(self.feature_type)
@@ -60,8 +61,9 @@ class EnvModel:
             x = U.flattenallbut0(x)
             # x = tf.nn.relu(U.dense(x, 256, "dense1",
                                    # weight_init=U.normc_initializer()))
-            output = U.dense(x, self.latent_size, "dense2",
+            output_logits = U.dense(x, self.latent_size, "dense2",
                              weight_init=U.normc_initializer())
+            output = output_logits
         return output
 
     def build_transition(self, latent_state, actions, seq_length=None,
@@ -83,6 +85,16 @@ class EnvModel:
             # def cell():
                 # return GRUACell(
                 # self.latent_size//self.transition_stacked_dim, n_factors)
+            # if self.sigmoid_latents:
+                # class SigmoidGRUCell(tf.nn.contrib.rnn.GRUBlockCell):
+                    # def __call__(self, x, h_prev, scope=None):
+                        # new_h, _ = super(SigmoidGRUCell, self).__call__(x, h_prev, scope)
+                        # from tensorflow.python.ops import variable_scope as vs
+                        # with vs.variable_scope(scope or type(self).__name__):
+                            # new_h_sigmoided = tf.nn.sigmoid(new_h)
+                            # return new_h, new_h_sigmoided
+                # def cell():
+                    # return SigmoidGRUCell(self.latent_size)
             def cell():
                 return tf.contrib.rnn.GRUBlockCell(
                     self.latent_size)
@@ -103,8 +115,12 @@ class EnvModel:
         with tf.variable_scope("featurer", reuse=reuse) as scope:
             self.featurer_scope = scope
             feature_size = np.prod(self.feature_shape)
+            if self.sigmoid_latents:
+                x = tf.sigmoid(latent_state)
+            else:
+                x = latent_state
             x = tf.nn.elu(U.dense(
-                latent_state, 256, "dense1",
+                x, 256, "dense1",
                 weight_init=U.normc_initializer()))
             x = U.dense(x, feature_size, "dense2",
                         weight_init=U.normc_initializer())
@@ -122,6 +138,8 @@ class EnvModel:
                 x = tf.concat([latent_state, latent_goal_state], axis=1)
             else:
                 x = latent_state
+            if self.sigmoid_latents:
+                x = tf.sigmoid(x)
             x = tf.nn.elu(
                 U.dense(x, 256, "dense1", weight_init=U.normc_initializer()))
             x = U.dense(x, 1, "dense2",
@@ -240,8 +258,15 @@ class EnvModel:
             raise RuntimeError()
 
         feature_loss = tf.reduce_mean(feature_diff, name="feature_loss")
-        latent_diff = zero_out(tf.squared_difference(x_future, x_future_hat),
-                               seq_length, max_horizon)
+
+        if self.sigmoid_latents:
+            latent_diff = zero_out(tf.norm(tf.sigmoid(x_future) -
+                                           tf.sigmoid(x_future_hat),
+                                           ord=1),
+                                   seq_length, max_horizon)
+        else:
+            latent_diff = zero_out(tf.squared_difference(x_future, x_future_hat),
+                                   seq_length, max_horizon)
         latent_loss = tf.reduce_mean(latent_diff, name='latent_loss')
         if use_goals:
             total_loss = tf.identity(latent_loss + x_to_f_ratio*feature_loss +
@@ -308,7 +333,11 @@ class EnvModel:
             timestep_summaries.extend([tf.summary.scalar(
                 "loss%i"%i, t) for i, t in enumerate(goal_losses)])
         var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, tf.get_variable_scope().name)
-        return total_loss, x_hat, var_list, tf.summary.merge(summaries),\
+        if self.sigmoid_latents:
+            latent_results = tf.sigmoid(x_hat)
+        else:
+            latent_results = x_hat
+        return total_loss, latent_results, var_list, tf.summary.merge(summaries),\
                 tf.summary.merge(timestep_summaries)
 
     # -------------- UTILITIES ---------------------------------------

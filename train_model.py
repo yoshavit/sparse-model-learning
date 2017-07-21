@@ -38,7 +38,7 @@ if args.logdir is not None:
     # logdir = args.logdir
     config = configs.load_config(logdir)
 else:
-    config = configs.config_index[args.configid]
+    config = configs.get_config(args.configid)
     # logdir = os.path.join('data', config['env'], args.logname, 'train')
     logdir = os.path.join(scriptdir, 'data', config['env'], args.logname, 'train')
     logdir = increment_path(os.path.join(logdir, "run"))
@@ -58,8 +58,6 @@ ml = ModelLearner(env,
                   summary_writer=sw)
 saver = tf.train.Saver()
 savepath = os.path.join(logdir, "model.ckpt")
-logger.info("Gathering initial gameplay data!")
-ml.gather_gameplay_data(config['n_initial_games'])
 restoring_saver = tf.train.Saver(var_list=[var for var in tf.global_variables()
                                            if var.name[:9] != "embedding"])
 restore_path = tf.train.latest_checkpoint(logdir)
@@ -74,6 +72,14 @@ with tf.Session() as sess:
     global_step = sess.run(ml.global_step)
     logger.info("Beginning training.")
     logger.info("To visualize, call:\ntensorboard --logdir={}".format(logdir))
+    logger.info("Gathering initial gameplay data!")
+    if config['training_agent'] == "random_rollout":
+        from agents import RandomRolloutAgent
+        agent = RandomRolloutAgent(ml.envmodel)
+        policy = agent.policy
+    else:
+        policy=None
+    ml.gather_gameplay_data(config['n_initial_games'], policy=policy)
     from utils import dataset
     while (not config['maxsteps']) or global_step < config['maxsteps']:
         transition_data = ml.create_transition_dataset(n=20000)
@@ -97,5 +103,5 @@ with tf.Session() as sess:
             logger.info("Saving weights...")
         saver.save(sess, savepath, global_step)
         global_step = sess.run(ml.global_step)
-        ml.gather_gameplay_data(10)
+        ml.gather_gameplay_data(10, policy=policy)
 logger.info("Training complete!")

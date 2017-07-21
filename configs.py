@@ -2,6 +2,25 @@
 import os
 import dill as pickle
 import json
+config_index = {}
+default_params = {
+# Parameters meant to make older paramfiles forwards-compatible
+# Must all be primitives, because we will make a shallow copy
+    'stepsize': 1e-4,
+    'maxsteps': 1e7,
+    'has_labels': False,
+    'latent_size': 128,
+    'x_to_f_ratio': 1,
+    'x_to_g_ratio': 1,
+    'maxhorizon':8,
+    'sigmoid_latents': False,
+    'use_goalstates': True,
+    'minhorizon': 2,
+    'transition_stacked_dim': 1,
+    'training_agent': 'random',
+    'n_initial_games': 300,
+    'batchsize': 16
+}
 def isalambda(v):
     LAMBDA = lambda:0
     return isinstance(v, type(LAMBDA)) and v.__name__ == LAMBDA.__name__
@@ -16,13 +35,24 @@ def save_config(config, savedir):
     json.dump(lambdaless_config, open(jsonpath, 'w'))
 def load_config(loaddir):
     picklepath = os.path.join(loaddir, "config.p")
+    config =  pickle.load(open(picklepath, 'rb'))
+    for k in default_params.keys(): # make backwards compatible
+        if k not in config.keys():
+            config[k] = default_params[k]
     return pickle.load(open(picklepath, 'rb'))
+def get_config(configid):
+    " Create a new config, indexed by the keys in config_index"
+    config = default_params.copy()
+    try:
+        custom_config = config_index[configid]
+    except KeyError:
+        raise KeyError("configid must be one of {}".format(config_index.keys()))
+    for k,v in custom_config.items():
+        config[k] = v
+    return config
 
-config_index = {}
 mnist_config_featureless = {
     'env': 'mnist-v0',
-    'stepsize': 1e-4,
-    'maxsteps': 10000000,
     'feature_extractor': lambda state_info: [state_info == 0],
     'feature_shape': [1, 2], # one feature, with two possible classes
     'feature_type': 'softmax',
@@ -30,88 +60,65 @@ mnist_config_featureless = {
                 # to label. If provided, output includes a fourth column, "labels"
     'label_extractor': lambda state_info: [state_info],
     'has_labels': True,
-    'latent_size': 128,
-    'maxhorizon': 8,
     'x_to_f_ratio': 0,
-    'x_to_g_ratio': 1,
-    'transition_stacked_dim': 1,
-    'minhorizon': 2,
-    'batchsize': 16,
-    'sigmoid_latents': False,
-    'n_initial_games': 300,
-    'use_goalstates': True,
 }
 config_index['mnist_simple'] = mnist_config_featureless
 
 # simple multi-goal config (no features)
 mnist_multigoal_config_featureless = {
     'env': 'mnist-multigoal-v0',
-    'stepsize': 1e-4,
-    'maxsteps': 10000000,
     'feature_extractor': lambda state_info: [state_info == 0],
     'feature_shape': [1, 2], # one feature, with two possible classes
     'feature_type': 'softmax',
-            # label_extractor - (optional) function from info['state'/'next_state']
-                # to label. If provided, output includes a fourth column, "labels"
     'label_extractor': lambda state_info: [state_info],
     'has_labels': True,
-    'latent_size': 128,
-    'maxhorizon': 8,
-    'x_to_f_ratio': 1,
-    'x_to_g_ratio': 1,
-    'batchsize': 16,
-    'transition_stacked_dim': 1,
-    'sigmoid_latents': False,
-    'minhorizon': 2,
-    'n_initial_games': 300,
-    'use_goalstates': True,
 }
 config_index['mnist_multigoal'] = mnist_multigoal_config_featureless
-# simple multi-goal config (w features)
+# simple multi-goal config (no features, yes sigmoided latents and an agent that
+# uses learning to explore)
+mnist_multigoal_config_nfeature_wsig_wagent = {
+    'env': 'mnist-multigoal-v0',
+    'feature_extractor': lambda state_info: [state_info==0],
+    'feature_shape': [1, 2], # one feature, with two possible classes
+    'feature_type': 'softmax',
+    'label_extractor': lambda state_info: [state_info],
+    'x_to_f_ratio': 0,
+    'sigmoided_latents': True,
+    'has_labels': True,
+    'training_agent': 'random_rollout'
+}
+config_index['mnist_multigoal_nfeat_wsig_wagent'] = mnist_multigoal_config_nfeature_wsig_wagent
+# simple multi-goal config (w features and sigmoided latents)
 mnist_multigoal_config_wfeature_wsig = {
     'env': 'mnist-multigoal-v0',
-    'stepsize': 1e-4,
-    'maxsteps': 10000000,
     'feature_extractor': lambda state_info: [state_info],
     'feature_shape': [1, 10], # one feature, with two possible classes
     'feature_type': 'softmax',
-            # label_extractor - (optional) function from info['state'/'next_state']
-                # to label. If provided, output includes a fourth column, "labels"
     'label_extractor': lambda state_info: [state_info],
+    'sigmoided_latents': True,
     'has_labels': True,
-    'latent_size': 128,
-    'maxhorizon': 8,
-    'x_to_f_ratio': 1,
-    'x_to_g_ratio': 1,
-    'batchsize': 16,
-    'transition_stacked_dim': 1,
-    'sigmoid_latents': False,
-    'minhorizon': 2,
-    'n_initial_games': 300,
-    'use_goalstates': True,
 }
 config_index['mnist_multigoal_wfeat_wsig'] = mnist_multigoal_config_wfeature_wsig
+# simple multi-goal config (w features and sigmoided latents and an agent that
+# uses learning to explore)
+mnist_multigoal_config_wfeature_wsig_wagent = {
+    'env': 'mnist-multigoal-v0',
+    'feature_extractor': lambda state_info: [state_info],
+    'feature_shape': [1, 10], # one feature, with two possible classes
+    'feature_type': 'softmax',
+    'label_extractor': lambda state_info: [state_info],
+    'has_labels': True,
+    'sigmoided_latents': True,
+    'training_agent': 'random_rollout',
+}
+config_index['mnist_multigoal_wfeat_wsig_wagent'] = mnist_multigoal_config_wfeature_wsig_wagent
 # simplified mnist-9game config (fully observable)
 mnist_9game_simple_wfeatures = {
     'env': 'mnist-9game-simple-v0',
-    'stepsize': 1e-4,
-    'maxsteps': 10000000,
     'feature_extractor': lambda state_info: state_info,
     'feature_shape': [3, 3, 3],
     'feature_type': 'softmax',
-            # label_extractor - (optional) function from info['state'/'next_state']
-                # to label. If provided, output includes a fourth column, "labels"
     'label_extractor': lambda state_info: state_info[2][0],
     'has_labels': True,
-    'latent_size': 128,
-    'maxhorizon': 8,
-    'x_to_f_ratio': 1,
-    'x_to_g_ratio': 1,
-    'batchsize': 16,
-    'transition_stacked_dim': 1,
-    'sigmoid_latents': False,
-    'minhorizon': 2,
-    'n_initial_games': 300,
-    'use_goalstates': True,
 }
 config_index['9game_simple_wfeatures'] = mnist_9game_simple_wfeatures

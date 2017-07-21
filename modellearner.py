@@ -4,6 +4,7 @@ import tensorflow as tf
 from model import EnvModel
 from utils.visualize_embeddings import images_to_sprite
 from tensorflow.contrib.tensorboard.plugins import projector
+from collections import deque
 import scipy.misc
 import os
 
@@ -173,11 +174,18 @@ class ModelLearner:
         for i in range(num_games):
             game_memory = []
             obs, goal_obs = self.env.reset()
+            action_queue = deque()
             done = False
             c = 0
             while not done:
                 c += 1
-                action = policy(obs, goal_obs)
+                if len(action_queue) == 0:
+                    action_or_actions = policy(obs, goal_obs)
+                    try:
+                        action_queue.extend(action_or_actions)
+                    except TypeError:
+                        action_queue.append(action_or_actions)
+                action = action_queue.popleft()
                 new_obs, rew, done, info = self.env.step(action)
                 game_memory.append((obs, action, new_obs, rew, bool(done), info))
                 assert int(bool(rew)) == rew, "Game must have goal-type rewards"

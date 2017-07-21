@@ -347,60 +347,68 @@ class EnvModel:
 
     def encode(self, state):
         single_run = state.ndim == len(self.ob_space)
-        if single_run:
-            nstate = np.zeros([self.test_batchsize] + self.ob_space)
-            nstate[0] += state
-            state = nstate
+        batchsize = 1 if single_run else state.shape[0]
+        state = self.__reshape_batch(state, self.ob_space)
         feed_dict = {self.input_state: state}
         latent_state = U.get_session().run(self.default_encoder, feed_dict)
-        if single_run:
-            latent_state = latent_state[0]
+        latent_state = latent_state[:batchsize]
+        if single_run: latent_state = latent_state[0]
         return latent_state
 
     def stepforward(self, latent_state, actions):
         single_run = latent_state.ndim == 1
+        batchsize = 1 if single_run else latent_state.shape[0]
         actions = np.asarray(actions)
         if actions.ndim == 0: actions = np.expand_dims(actions, 1)
-        if single_run:
-            nlatent_state = np.zeros([self.test_batchsize, self.latent_size])
-            nlatent_state[0] += latent_state
-            latent_state = nlatent_state
-            nactions = np.zeros([self.test_batchsize, actions.shape[0]])
-            nactions[0] += actions
-            actions = nactions
+        actions_dim_minus_batchdim = actions.shape[0] if single_run else actions.shape[1]
+        latent_state = self.__reshape_batch(latent_state, [self.latent_size])
+        actions = self.__reshape_batch(actions,
+                                       [actions_dim_minus_batchdim])
         feed_dict = {self.input_latent_state: latent_state,
                      self.input_actions: actions}
         nxs = U.get_session().run(self.default_transition, feed_dict=feed_dict)
+        nxs = nxs[:batchsize]
         nx = nxs[:, -1]
-        if single_run:
-            nx = nx[0]
-            nxs = nxs[0]
+        if single_run: nxs = nxs[0]; nx = nx[0]
         return nx, nxs
 
     def getfeatures(self, latent_state):
         single_run = latent_state.ndim == 1
-        if single_run:
-            nlatent_state = np.zeros([self.test_batchsize, self.latent_size])
-            nlatent_state[0] += latent_state
-            latent_state = nlatent_state
+        batchsize = 1 if single_run else latent_state.shape[0]
+        latent_state = self.__reshape_batch(latent_state, [self.latent_size])
         feed_dict = {self.input_latent_state: latent_state}
         f = U.get_session().run(self.default_featurer, feed_dict=feed_dict)
-        if single_run:
-            f = f[0]
+        f = f[:batchsize]
+        if single_run: f = f[0]
         return f
 
     def checkgoal(self, latent_state, latent_goal=None):
         single_run = latent_state.ndim == 1
-        if single_run:
-            nlatent_state = np.zeros([self.test_batchsize, self.latent_size])
-            nlatent_state[0] += latent_state
-            latent_state = nlatent_state
-            nlatent_goal = np.zeros([self.test_batchsize, self.latent_size])
-            nlatent_goal[0] += latent_goal
-            latent_goal = nlatent_goal
+        batchsize = 1 if single_run else latent_state.shape[0]
+        latent_state = self.__reshape_batch(latent_state, [self.latent_size])
+        latent_goal = self.__reshape_batch(latent_goal, [self.latent_size])
         feed_dict = {self.input_latent_state: latent_state,
                      self.input_latent_goalstate: latent_goal}
         g = U.get_session().run(self.default_goaler, feed_dict=feed_dict)
-        if single_run:
-            g = g[0]
+        g = g[:batchsize]
+        if single_run: g = g[0]
         return g
+
+    def __reshape_batch(self, inp, dims_minus_batchdim):
+        if inp.ndim == len(dims_minus_batchdim):
+            inp = np.expand_dims(inp, 0)
+        if inp.shape[0] < self.test_batchsize:
+            tmp = inp
+            inp = np.zeros([self.test_batchsize] + dims_minus_batchdim)
+            inp[:tmp.shape[0]] = tmp[:]
+            return inp
+        elif inp.shape[0] == self.test_batchsize:
+            return inp
+        else:
+            raise ValueError(
+                "Input's batchsize must be smaller than"
+                "envmodel.test_batchsize; was {} > {}".format(inp.shape[0],
+                                                              self.test_batchsize))
+
+
+

@@ -8,7 +8,7 @@ from collections import deque
 import scipy.misc
 import os
 
-REPLAY_MEMORY_SIZE = 1000
+REPLAY_MEMORY_SIZE = 500
 DEFAULT_STEPSIZE = 1e-4
 
 

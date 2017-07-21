@@ -56,7 +56,8 @@ with tf.Session() as sess:
         latents = np.zeros([0, config['latent_size']])
         logger.info("Generating random images and latents")
         for _ in range(300):
-            s = np.stack([coreenv._get_random_obs() for _ in range(32)],
+            s = np.stack([coreenv._get_random_obs() for _ in
+                          range(envmodel.test_batchsize)],
                          axis=0)
             x = envmodel.encode(s)
             states = np.concatenate([states, s], axis=0)

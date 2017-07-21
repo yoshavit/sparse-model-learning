@@ -9,7 +9,7 @@ default_params = {
     'stepsize': 1e-4,
     'maxsteps': 1e7,
     'has_labels': False,
-    'latent_size': 128,
+    'latent_size': 64,
     'x_to_f_ratio': 1,
     'x_to_g_ratio': 1,
     'maxhorizon':8,
@@ -18,7 +18,7 @@ default_params = {
     'minhorizon': 2,
     'transition_stacked_dim': 1,
     'training_agent': 'random',
-    'n_initial_games': 300,
+    'n_initial_games': 200,
     'batchsize': 16
 }
 def isalambda(v):

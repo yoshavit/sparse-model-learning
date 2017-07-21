@@ -70,8 +70,6 @@ with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
     sw.add_graph(sess.graph)
     global_step = sess.run(ml.global_step)
-    logger.info("Beginning training.")
-    logger.info("To visualize, call:\ntensorboard --logdir={}".format(logdir))
     logger.info("Gathering initial gameplay data!")
     if config['training_agent'] == "random_rollout":
         from agents import RandomRolloutAgent
@@ -79,10 +77,12 @@ with tf.Session() as sess:
         policy = agent.policy
     else:
         policy=None
-    ml.gather_gameplay_data(config['n_initial_games'], policy=policy)
+    ml.gather_gameplay_data(config['n_initial_games'], policy=None)
+    logger.info("Beginning training.")
+    logger.info("To visualize, call:\ntensorboard --logdir={}".format(logdir))
     from utils import dataset
     while (not config['maxsteps']) or global_step < config['maxsteps']:
-        transition_data = ml.create_transition_dataset(n=20000)
+        transition_data = ml.create_transition_dataset(n=10000)
         for batch in dataset.iterbatches(transition_data,
                                          batch_size=config['batchsize'],
                                          shuffle=True):

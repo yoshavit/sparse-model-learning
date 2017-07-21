@@ -237,8 +237,11 @@ class EnvModel:
             else:
                 sg = goal_states
                 xg = self.build_encoder(sg)
-                xg_padded = tf.tile(xg, [T, 1])
-                _, g_hat_logits = self.build_goaler(x_future_flattened_hat, xg_padded)
+                xg = tf.expand_dims(xg, axis=1)
+                xg_padded = tf.tile(xg, [1, T, 1])
+                xg_flattened = tf.reshape(xg_padded, [-1, self.latent_size])
+                _, g_hat_logits = self.build_goaler(x_future_flattened_hat,
+                                                    xg_flattened)
             g_hat_logits = tf.reshape(g_hat_logits, [-1, T])
             goal_diff = zero_out(
                 tf.nn.sigmoid_cross_entropy_with_logits(labels=g,
@@ -371,7 +374,8 @@ class EnvModel:
         nx = nxs[:, -1]
         if single_run:
             nx = nx[0]
-        return nx
+            nxs = nxs[0]
+        return nx, nxs
 
     def getfeatures(self, latent_state):
         single_run = latent_state.ndim == 1

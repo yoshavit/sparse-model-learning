@@ -90,7 +90,7 @@ with tf.Session() as sess:
             else:
                 action = "wasd".find(action)
             s, rew, done, info = env.step(action)
-            x = envmodel.stepforward(x, action)
+            x, _ = envmodel.stepforward(x, action)
             if use_latent_visualizer:
                 x_visualized = lv.get_nearest_image(x)
                 cv2.imshow("envmodel_state", cv2.resize(x_visualized, None,

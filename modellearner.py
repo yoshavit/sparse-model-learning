@@ -168,16 +168,16 @@ class ModelLearner:
                 timestep) to an action. Default is random.
         """
         if not callable(policy):
-            policy = lambda obs: self.env.action_space.sample()
+            policy = lambda obs, goal_obs: self.env.action_space.sample()
 
         for i in range(num_games):
             game_memory = []
-            obs = self.env.reset()
+            obs, goal_obs = self.env.reset()
             done = False
             c = 0
             while not done:
                 c += 1
-                action = policy(obs)
+                action = policy(obs, goal_obs)
                 new_obs, rew, done, info = self.env.step(action)
                 game_memory.append((obs, action, new_obs, rew, bool(done), info))
                 assert int(bool(rew)) == rew, "Game must have goal-type rewards"

@@ -68,7 +68,6 @@ with tf.Session() as sess:
     else:
         logger.info("Initializing brand new network parameters.")
         sess.run(tf.global_variables_initializer())
-    sw.add_graph(sess.graph)
     global_step = sess.run(ml.global_step)
     logger.info("Gathering initial gameplay data!")
     if config['training_agent'] == "random_rollout":

@@ -91,7 +91,23 @@ mnist_linear_config_featureless_shorthorizon = {
     'use_goal_boosting': True,
     'x_to_gb_ratio': 0.5,
 }
-config_index['mnist_linear_nfeat_fewstep'] = mnist_linear_config_featureless_shorthorizon
+config_index['mnist_linear_nfeat_fewstep_wgb'] = mnist_linear_config_featureless_shorthorizon
+# simple mnist config with linear action dynamics
+mnist_linear_config_featureless_shorthorizon_wsig_wgb = {
+    'env': 'mnist-linear-v0',
+    'feature_extractor': lambda state_info: [state_info == 0],
+    'feature_shape': [1, 2],
+    'feature_type': "softmax",
+    'x_to_f_ratio': 0,
+    'has_labels': True,
+    'label_extractor': lambda state_info: [state_info],
+    'maxhorizon': 3,
+    'minhorizon': 1,
+    'use_goal_boosting': True,
+    'x_to_gb_ratio': 0.5,
+    'sigmoid_latents': True,
+}
+config_index['mnist_linear_nfeat_fewstep_wgb_wsig'] = mnist_linear_config_featureless_shorthorizon_wsig_wgb
 # simple multi-goal config (no features, yes sigmoided latents and an agent that
 # uses learning to explore)
 mnist_multigoal_config_nfeature_wsig_wagent = {

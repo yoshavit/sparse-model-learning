@@ -106,7 +106,7 @@ with tf.Session() as sess:
             batch = next(dataset.iterbatches(transition_data,
                                              batch_size=ml.num_embed_vectors,
                                              shuffle=False))
-            ml.train_model(sess, *batch, show_embeddings=True)
+            ml.train_model(sess, *batch, gb_inputs=gb_batch, show_embeddings=True)
             # By only saving during the embedding phase, our embedding isn't
             # overwritten by other saves
         else:

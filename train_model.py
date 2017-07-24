@@ -83,10 +83,20 @@ with tf.Session() as sess:
     from utils import dataset
     while (not config['maxsteps']) or global_step < config['maxsteps']:
         transition_data = ml.create_transition_dataset(n=10000)
+        if config['use_goal_boosting']:
+            gb_data = ml.create_goals_dataset(n=1000)
+            gb_data_batches = dataset.iterbatches(gb_data,
+                                                  batch_size=config['batchsize'],
+                                                  shuffle=True,
+                                                  repeat=True)
         for batch in dataset.iterbatches(transition_data,
                                          batch_size=config['batchsize'],
                                          shuffle=True):
-            ml.train_model(sess, *batch)
+            if config['use_goal_boosting']:
+                gb_batch = next(gb_data_batches)
+            else:
+                gb_batch = None
+            ml.train_model(sess, *batch, gb_inputs=gb_batch)
         if args.show_embeddings:
             # Train a single step of ml.num_embed_vectors instances
             logger.info("Saving weights, creating embedding...")

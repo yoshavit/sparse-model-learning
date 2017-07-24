@@ -28,27 +28,35 @@ class ModelLearner:
             "global_step", [], tf.int32,
             initializer=tf.constant_initializer(0, dtype=tf.int32),
             trainable=False)
-        self.states = tf.placeholder(tf.float32, shape=[None, maxhorizon + 1] +
-                                      list(env.observation_space.shape), name="states")
-        self.actions = tf.placeholder(tf.int32, shape=[None, maxhorizon], name="actions")
-        self.goal_values = tf.placeholder(tf.float32, shape=[None,
+        self.tj_states = tf.placeholder(tf.float32, shape=[None, maxhorizon + 1] +
+                                      list(env.observation_space.shape),
+                                        name="states_tj")
+        self.tj_actions = tf.placeholder(tf.int32, shape=[None, maxhorizon],
+                                         name="actions_tj")
+        self.tj_goal_values = tf.placeholder(tf.float32, shape=[None,
                                                              maxhorizon],
-                                          name="goal_values")
-        self.goal_states = tf.placeholder(tf.float32, shape=[None] +
+                                          name="goal_values_tj")
+        self.tj_goal_states = tf.placeholder(tf.float32, shape=[None] +
                                           list(env.observation_space.shape),
-                                          name="goal_states")
+                                          name="goal_states_tj")
         if config['feature_type'] == 'regression':
-            self.features = tf.placeholder(tf.float32,
+            self.tj_features = tf.placeholder(tf.float32,
                                            shape=[None, maxhorizon+1] + feature_shape,
-                                           name="features")
+                                           name="features_tj")
         elif config['feature_type'] == 'softmax':
-            self.features = tf.placeholder(tf.int32,
+            self.tj_features = tf.placeholder(tf.int32,
                                            shape=[None,maxhorizon+1] + feature_shape[:-1],
-                                           name="features")
+                                           name="features_tj")
         else:
             raise RuntimeError("Feature loss type must be either regression or softmax")
-        self.seq_length = tf.placeholder(tf.int32, shape=[None, 1], name="seq_length")
-        inc_step = self.global_step.assign_add(tf.shape(self.states)[0])
+        self.tj_seq_length = tf.placeholder(tf.int32, shape=[None, 1], name="seq_length")
+        self.gb_goal_states = tf.placeholder(tf.float32, shape=[None] +
+                                             list(env.observation_space.shape),
+                                             name="goal_states_gb")
+        self.gb_states = tf.placeholder(tf.float32, shape=[None] +
+                                        list(env.observation_space.shape),
+                                        name="states_gb")
+        inc_step = self.global_step.assign_add(tf.shape(self.tj_states)[0])
         self.local_steps = 0
 
         self.envmodel = EnvModel(env.observation_space,
@@ -58,17 +66,20 @@ class ModelLearner:
                                  transition_stacked_dim=config['transition_stacked_dim'],
                                  sigmoid_latents=config['sigmoid_latents'],
                                  feature_type=config['feature_type'])
-        self.loss, latents, var_list, base_summary, timestep_summary = self.envmodel.loss(
-            self.states,
-            self.actions,
-            self.features,
-            goal_values=self.goal_values,
-            goal_states=self.goal_states,
-            seq_length=self.seq_length,
+        self.loss, latents, var_list, base_summary, timestep_summary = self.envmodel.trajectory_loss(
+            self.tj_states,
+            self.tj_actions,
+            self.tj_features,
+            goal_values=self.tj_goal_values,
+            goal_states=self.tj_goal_states,
+            seq_length=self.tj_seq_length,
             max_horizon=config['maxhorizon'],
             x_to_f_ratio=config['x_to_f_ratio'],
             x_to_g_ratio=config['x_to_g_ratio'],
         )
+        if config['use_goal_boosting']:
+            self.loss += config['x_to_gb_ratio']*\
+                    self.envmodel.goal_loss(self.gb_states, self.gb_goal_states)
         grads = tf.gradients(self.loss, var_list)
         grads, _ = tf.clip_by_global_norm(grads, 40.0)
         grads_and_vars = list(zip(grads, var_list))
@@ -102,7 +113,7 @@ class ModelLearner:
 
     def train_model(self, sess, states, actions, features, goal_values,
                     goal_states, seq_lengths, labels=None,
-                   show_embeddings=False):
+                   show_embeddings=False, gb_inputs=None):
         """
         Args:
             states - array of shape batch_size x T+1 x [state_shape]
@@ -122,13 +133,17 @@ class ModelLearner:
             fetches = [self.train_op, self.global_step]
         if show_embeddings:
             fetches += [self.embeddings_op]
-        feed_dict = {self.seq_length: seq_lengths,
-                     self.states: states,
-                     self.actions: actions,
-                     self.features: features,
-                     self.goal_values: goal_values,
-                     self.goal_states: goal_states,
+        feed_dict = {self.tj_seq_length: seq_lengths,
+                     self.tj_states: states,
+                     self.tj_actions: actions,
+                     self.tj_features: features,
+                     self.tj_goal_values: goal_values,
+                     self.tj_goal_states: goal_states,
                     }
+        if self.config['use_goal_boosting']:
+            gb_states, gb_goal_states = gb_inputs
+            feed_dict[self.gb_states] = gb_states
+            feed_dict[self.gb_goal_states] = gb_goal_states
         fetched = sess.run(fetches, feed_dict=feed_dict)
         self.local_steps += 1
         if do_summary:
@@ -193,6 +208,24 @@ class ModelLearner:
             self.replay_memory.append(tuple(game_memory))
         if len(self.replay_memory) > REPLAY_MEMORY_SIZE:
             self.replay_memory = self.replay_memory[-REPLAY_MEMORY_SIZE:]
+
+    def create_goals_dataset(self, n=None):
+        """
+        Constructs a list of matrices with examples of states/goal states, and
+        whether the goal was satisfied
+
+        NOTE: Only works for games in which done == reward!
+        """
+        assert self.replay_memory, "Must gather gameplay data before creating transition dataset"
+        last_states = []
+        goal_states = []
+        for game in self.replay_memory:
+            _, _, last_state, goal, done, info = game[-1]
+            assert goal == done
+            if goal: # goal reached
+                last_states.append(last_state)
+                goal_states.append(info['goal_state'])
+        return np.stack(last_states, axis=0), np.stack(goal_states, axis=0)
 
     def create_transition_dataset(self, n=None, feature_from_info=True,
                                  variable_steps=True):

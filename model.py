@@ -151,7 +151,7 @@ class EnvModel:
 
     # -------------- LOSS FUNCTIONS -----------------------------------
 
-    def loss(self,
+    def trajectory_loss(self,
              states,
              actions,
              features,
@@ -344,6 +344,20 @@ class EnvModel:
             latent_results = x_hat
         return total_loss, latent_results, var_list, tf.summary.merge(summaries),\
                 tf.summary.merge(timestep_summaries)
+
+    def goal_loss(self,
+                  states,
+                  goal_states):
+        s = states
+        gs = goal_states
+        x = self.build_encoder(s)
+        gx = self.build_encoder(gs)
+        _, gv_logits = self.build_goaler(x, gx)
+        ones = tf.ones_like(gv_logits, dtype=tf.float32)
+        loss = tf.reduce_mean(
+            tf.nn.sigmoid_cross_entropy_with_logits(labels=ones,
+                                                    logits=gv_logits))
+        return loss
 
     # -------------- UTILITIES ---------------------------------------
 

@@ -19,7 +19,9 @@ default_params = {
     'transition_stacked_dim': 1,
     'training_agent': 'random',
     'n_initial_games': 200,
-    'batchsize': 16
+    'batchsize': 16,
+    'use_goal_boosting': False,
+    'x_to_gb_ratio': 1,
 }
 def isalambda(v):
     LAMBDA = lambda:0
@@ -84,7 +86,6 @@ mnist_linear_config_featureless_shorthorizon = {
     'x_to_f_ratio': 0,
     'has_labels': True,
     'label_extractor': lambda state_info: [state_info],
-    'sigmoid_latents': True,
     'maxhorizon': 3,
     'minhorizon': 1,
 }
@@ -115,6 +116,19 @@ mnist_multigoal_config_wfeature_wsig = {
     'has_labels': True,
 }
 config_index['mnist_multigoal_wfeat_wsig'] = mnist_multigoal_config_wfeature_wsig
+# simple linear config (w features and sigmoided latents)
+mnist_linear_config_wfeature_wsig_wgb = {
+    'env': 'mnist-linear-v0',
+    'feature_extractor': lambda state_info: [state_info],
+    'feature_shape': [1, 10], # one feature, with two possible classes
+    'feature_type': 'softmax',
+    'label_extractor': lambda state_info: [state_info],
+    'sigmoided_latents': True,
+    'has_labels': True,
+    'use_goal_boosting': True,
+    'x_to_gb_ratio': 0.5,
+}
+config_index['mnist_linear_wfeat_wsig_wgb'] = mnist_linear_config_wfeature_wsig_wgb
 # simple multi-goal config (w features and sigmoided latents and an agent that
 # uses learning to explore)
 mnist_multigoal_config_wfeature_wsig_wagent = {
@@ -126,6 +140,7 @@ mnist_multigoal_config_wfeature_wsig_wagent = {
     'has_labels': True,
     'sigmoided_latents': True,
     'training_agent': 'random_rollout',
+
 }
 config_index['mnist_multigoal_wfeat_wsig_wagent'] = mnist_multigoal_config_wfeature_wsig_wagent
 # simplified mnist-9game config (fully observable)

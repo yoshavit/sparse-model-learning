@@ -9,7 +9,7 @@ default_params = {
     'stepsize': 1e-4,
     'maxsteps': 1e7,
     'has_labels': False,
-    'latent_size': 64,
+    'latent_size': 128,
     'x_to_f_ratio': 1,
     'x_to_g_ratio': 1,
     'maxhorizon':8,
@@ -100,6 +100,7 @@ mnist_multigoal_config_nfeature_wsig_wagent = {
     'x_to_f_ratio': 0,
     'sigmoided_latents': True,
     'has_labels': True,
+    'maxhorizon': 3,
     'training_agent': 'random_rollout'
 }
 config_index['mnist_multigoal_nfeat_wsig_wagent'] = mnist_multigoal_config_nfeature_wsig_wagent

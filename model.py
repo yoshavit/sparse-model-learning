@@ -265,11 +265,13 @@ class EnvModel:
         if self.sigmoid_latents:
             latent_diff = zero_out(tf.norm(tf.sigmoid(x_future) -
                                            tf.sigmoid(x_future_hat),
-                                           ord=1),
+                                           ord=1, axis=2),
                                    seq_length, max_horizon)
         else:
-            latent_diff = zero_out(tf.squared_difference(x_future, x_future_hat),
-                                   seq_length, max_horizon)
+            latent_diff = tf.reduce_mean(
+                zero_out(tf.squared_difference(x_future, x_future_hat),
+                         seq_length, max_horizon),
+                axis=2)
         latent_loss = tf.reduce_mean(latent_diff, name='latent_loss')
         if use_goals:
             total_loss = tf.identity(latent_loss + x_to_f_ratio*feature_loss +
@@ -315,7 +317,7 @@ class EnvModel:
                                      dtype=tf.float32) + 1e-12,
                     name="loss%i"%(i+1))
                 for i, t in enumerate(
-                    tf.split(tf.reduce_mean(latent_diff, axis=2),
+                    tf.split(latent_diff,
                              max_horizon, axis=1))]
             timestep_summaries.extend([tf.summary.scalar(
                 "loss%i"%i, t) for i, t in enumerate(latent_losses)])

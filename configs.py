@@ -72,8 +72,23 @@ mnist_multigoal_config_featureless = {
     'feature_type': 'softmax',
     'label_extractor': lambda state_info: [state_info],
     'has_labels': True,
+    'x_to_f_ratio': 0,
 }
 config_index['mnist_multigoal'] = mnist_multigoal_config_featureless
+# simple mnist config with linear action dynamics
+mnist_linear_config_featureless_shorthorizon = {
+    'env': 'mnist-linear-v0',
+    'feature_extractor': lambda state_info: [state_info == 0],
+    'feature_shape': [1, 2],
+    'feature_type': "softmax",
+    'x_to_f_ratio': 0,
+    'has_labels': True,
+    'label_extractor': lambda state_info: [state_info],
+    'sigmoid_latents': True,
+    'maxhorizon': 3,
+    'minhorizon': 1,
+}
+config_index['mnist_linear_nfeat_fewstep'] = mnist_linear_config_featureless_shorthorizon
 # simple multi-goal config (no features, yes sigmoided latents and an agent that
 # uses learning to explore)
 mnist_multigoal_config_nfeature_wsig_wagent = {

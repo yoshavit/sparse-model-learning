@@ -110,19 +110,19 @@ mnist_linear_config_featureless_shorthorizon_wsig_wgb = {
 config_index['mnist_linear_nfeat_fewstep_wgb_wsig'] = mnist_linear_config_featureless_shorthorizon_wsig_wgb
 # simple multi-goal config (no features, yes sigmoided latents and an agent that
 # uses learning to explore)
-mnist_multigoal_config_nfeature_wsig_wagent = {
+mnist_multigoal_config_nfeature_wsig_wgb = {
     'env': 'mnist-multigoal-v0',
     'feature_extractor': lambda state_info: [state_info==0],
     'feature_shape': [1, 2], # one feature, with two possible classes
     'feature_type': 'softmax',
     'label_extractor': lambda state_info: [state_info],
     'x_to_f_ratio': 0,
-    'sigmoided_latents': True,
+    'sigmoid_latents': True,
     'has_labels': True,
-    'maxhorizon': 3,
-    'training_agent': 'random_rollout'
+    'x_to_gb_ratio': 0.5,
+    'use_goal_boosting': True
 }
-config_index['mnist_multigoal_nfeat_wsig_wagent'] = mnist_multigoal_config_nfeature_wsig_wagent
+config_index['mnist_multigoal_nfeat_wsig_wgb'] = mnist_multigoal_config_nfeature_wsig_wgb
 # simple multi-goal config (w features and sigmoided latents)
 mnist_multigoal_config_wfeature_wsig = {
     'env': 'mnist-multigoal-v0',
@@ -130,7 +130,7 @@ mnist_multigoal_config_wfeature_wsig = {
     'feature_shape': [1, 10], # one feature, with two possible classes
     'feature_type': 'softmax',
     'label_extractor': lambda state_info: [state_info],
-    'sigmoided_latents': True,
+    'sigmoid_latents': True,
     'has_labels': True,
 }
 config_index['mnist_multigoal_wfeat_wsig'] = mnist_multigoal_config_wfeature_wsig
@@ -141,7 +141,7 @@ mnist_linear_config_wfeature_wsig_wgb = {
     'feature_shape': [1, 10], # one feature, with two possible classes
     'feature_type': 'softmax',
     'label_extractor': lambda state_info: [state_info],
-    'sigmoided_latents': True,
+    'sigmoid_latents': True,
     'has_labels': True,
     'use_goal_boosting': True,
     'x_to_gb_ratio': 0.5,
@@ -156,7 +156,7 @@ mnist_multigoal_config_wfeature_wsig_wagent = {
     'feature_type': 'softmax',
     'label_extractor': lambda state_info: [state_info],
     'has_labels': True,
-    'sigmoided_latents': True,
+    'sigmoid_latents': True,
     'training_agent': 'random_rollout',
 
 }

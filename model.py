@@ -263,14 +263,16 @@ class EnvModel:
         feature_loss = tf.reduce_mean(feature_diff, name="feature_loss")
 
         if self.sigmoid_latents:
-            latent_diff = zero_out(tf.norm(tf.sigmoid(x_future) -
-                                           tf.sigmoid(x_future_hat),
-                                           ord=1, axis=2),
-                                   seq_length, max_horizon)
+            latent_diff = zero_out(
+                tf.norm(tf.sigmoid(tf.stop_gradient(x_future)) -
+                        tf.sigmoid(x_future_hat),
+                        ord=1, axis=2),
+                seq_length, max_horizon)
         else:
-            latent_diff = tf.reduce_mean(
-                zero_out(tf.squared_difference(x_future, x_future_hat),
-                         seq_length, max_horizon),
+            latent_diff = tf.reduce_mean(zero_out(
+                tf.squared_difference(tf.stop_gradient(x_future),
+                                      x_future_hat),
+                seq_length, max_horizon),
                 axis=2)
         latent_loss = tf.reduce_mean(latent_diff, name='latent_loss')
         if use_goals:

@@ -13,7 +13,7 @@ default_params = {
     'x_to_f_ratio': 1,
     'x_to_g_ratio': 1,
     'maxhorizon':8,
-    'sigmoid_latents': False,
+    'sigmoid_latents': True,
     'use_goalstates': True,
     'minhorizon': 2,
     'transition_stacked_dim': 1,
@@ -53,7 +53,9 @@ def get_config(configid):
         config[k] = v
     return config
 
-mnist_config_featureless = {
+
+
+config = {
     'env': 'mnist-v0',
     'feature_extractor': lambda state_info: [state_info == 0],
     'feature_shape': [1, 2], # one feature, with two possible classes
@@ -64,10 +66,10 @@ mnist_config_featureless = {
     'has_labels': True,
     'x_to_f_ratio': 0,
 }
-config_index['mnist_simple'] = mnist_config_featureless
+config_index['mnist_simple'] = config
 
 # simple multi-goal config (no features)
-mnist_multigoal_config_featureless = {
+config = {
     'env': 'mnist-multigoal-v0',
     'feature_extractor': lambda state_info: [state_info == 0],
     'feature_shape': [1, 2], # one feature, with two possible classes
@@ -76,9 +78,9 @@ mnist_multigoal_config_featureless = {
     'has_labels': True,
     'x_to_f_ratio': 0,
 }
-config_index['mnist_multigoal'] = mnist_multigoal_config_featureless
+config_index['mnist_multigoal'] = config
 # simple mnist config with linear action dynamics
-mnist_linear_config_featureless_shorthorizon = {
+config = {
     'env': 'mnist-linear-v0',
     'feature_extractor': lambda state_info: [state_info == 0],
     'feature_shape': [1, 2],
@@ -91,9 +93,9 @@ mnist_linear_config_featureless_shorthorizon = {
     'use_goal_boosting': True,
     'x_to_gb_ratio': 0.5,
 }
-config_index['mnist_linear_nfeat_fewstep_wgb'] = mnist_linear_config_featureless_shorthorizon
+config_index['mnist_linear_nfeat_fewstep_wgb'] = config
 # simple mnist config with linear action dynamics
-mnist_linear_config_featureless_shorthorizon_wsig_wgb = {
+config = {
     'env': 'mnist-linear-v0',
     'feature_extractor': lambda state_info: [state_info == 0],
     'feature_shape': [1, 2],
@@ -107,10 +109,10 @@ mnist_linear_config_featureless_shorthorizon_wsig_wgb = {
     'x_to_gb_ratio': 0.5,
     'sigmoid_latents': True,
 }
-config_index['mnist_linear_nfeat_fewstep_wgb_wsig'] = mnist_linear_config_featureless_shorthorizon_wsig_wgb
+config_index['mnist_linear_nfeat_fewstep_wgb_wsig'] = config
 # simple multi-goal config (no features, yes sigmoided latents and an agent that
 # uses learning to explore)
-mnist_multigoal_config_nfeature_wsig_wgb = {
+config = {
     'env': 'mnist-multigoal-v0',
     'feature_extractor': lambda state_info: [state_info==0],
     'feature_shape': [1, 2], # one feature, with two possible classes
@@ -122,9 +124,9 @@ mnist_multigoal_config_nfeature_wsig_wgb = {
     'x_to_gb_ratio': 0.5,
     'use_goal_boosting': True
 }
-config_index['mnist_multigoal_nfeat_wsig_wgb'] = mnist_multigoal_config_nfeature_wsig_wgb
+config_index['mnist_multigoal_nfeat_wsig_wgb'] = config
 # simple multi-goal config (w features and sigmoided latents)
-mnist_multigoal_config_wfeature_wsig = {
+config = {
     'env': 'mnist-multigoal-v0',
     'feature_extractor': lambda state_info: [state_info],
     'feature_shape': [1, 10], # one feature, with two possible classes
@@ -133,9 +135,9 @@ mnist_multigoal_config_wfeature_wsig = {
     'sigmoid_latents': True,
     'has_labels': True,
 }
-config_index['mnist_multigoal_wfeat_wsig'] = mnist_multigoal_config_wfeature_wsig
+config_index['mnist_multigoal_wfeat_wsig'] = config
 # simple linear config (w features and sigmoided latents)
-mnist_linear_config_wfeature_wsig_wgb = {
+config = {
     'env': 'mnist-linear-v0',
     'feature_extractor': lambda state_info: [state_info],
     'feature_shape': [1, 10], # one feature, with two possible classes
@@ -146,10 +148,10 @@ mnist_linear_config_wfeature_wsig_wgb = {
     'use_goal_boosting': True,
     'x_to_gb_ratio': 0.5,
 }
-config_index['mnist_linear_wfeat_wsig_wgb'] = mnist_linear_config_wfeature_wsig_wgb
+config_index['mnist_linear_wfeat_wsig_wgb'] = config
 # simple multi-goal config (w features and sigmoided latents and an agent that
 # uses learning to explore)
-mnist_multigoal_config_wfeature_wsig_wagent = {
+config = {
     'env': 'mnist-multigoal-v0',
     'feature_extractor': lambda state_info: [state_info],
     'feature_shape': [1, 10], # one feature, with two possible classes
@@ -160,9 +162,9 @@ mnist_multigoal_config_wfeature_wsig_wagent = {
     'training_agent': 'random_rollout',
 
 }
-config_index['mnist_multigoal_wfeat_wsig_wagent'] = mnist_multigoal_config_wfeature_wsig_wagent
+config_index['mnist_multigoal_wfeat_wsig_wagent'] = config
 # simplified mnist-9game config (fully observable)
-mnist_9game_simple_wfeatures = {
+config = {
     'env': 'mnist-9game-simple-v0',
     'feature_extractor': lambda state_info: state_info,
     'feature_shape': [3, 3, 3],
@@ -170,4 +172,4 @@ mnist_9game_simple_wfeatures = {
     'label_extractor': lambda state_info: state_info[2][0],
     'has_labels': True,
 }
-config_index['9game_simple_wfeatures'] = mnist_9game_simple_wfeatures
+config_index['9game_simple_wfeatures'] = config

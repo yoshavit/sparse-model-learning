@@ -74,8 +74,9 @@ class ModelLearner:
             goal_states=self.tj_goal_states,
             seq_length=self.tj_seq_length,
             max_horizon=config['maxhorizon'],
-            x_to_f_ratio=config['x_to_f_ratio'],
-            x_to_g_ratio=config['x_to_g_ratio'],
+            x_scalar=config['x_scalar'],
+            f_scalar=config['f_scalar'],
+            g_scalar=config['g_scalar'],
         )
         if config['use_goal_boosting']:
             self.loss += config['x_to_gb_ratio']*\

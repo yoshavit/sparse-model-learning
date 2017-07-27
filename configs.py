@@ -10,12 +10,13 @@ default_params = {
     'maxsteps': 1e7,
     'has_labels': False,
     'latent_size': 128,
-    'x_to_f_ratio': 1,
-    'x_to_g_ratio': 1,
+    'f_scalar': 1,
+    'g_scalar': 1,
+    'x_scalar': 1,
     'maxhorizon':8,
     'sigmoid_latents': True,
     'use_goalstates': True,
-    'minhorizon': 2,
+    'minhorizon': 1,
     'transition_stacked_dim': 1,
     'training_agent': 'random',
     'n_initial_games': 200,
@@ -64,10 +65,23 @@ config = {
                 # to label. If provided, output includes a fourth column, "labels"
     'label_extractor': lambda state_info: [state_info],
     'has_labels': True,
-    'x_to_f_ratio': 0,
+    'f_scalar': 0,
 }
 config_index['mnist_simple'] = config
-
+# mnist with 2 layers
+config = {
+    'env': 'mnist-v0',
+    'feature_extractor': lambda state_info: [state_info == 0],
+    'feature_shape': [1, 2], # one feature, with two possible classes
+    'feature_type': 'softmax',
+            # label_extractor - (optional) function from info['state'/'next_state']
+                # to label. If provided, output includes a fourth column, "labels"
+    'label_extractor': lambda state_info: [state_info],
+    'has_labels': True,
+    'transition_stacked_dim': 2,
+    'f_scalar': 0,
+}
+config_index['transition_stacked_dim'] = config
 # simple multi-goal config (no features)
 config = {
     'env': 'mnist-multigoal-v0',
@@ -76,7 +90,7 @@ config = {
     'feature_type': 'softmax',
     'label_extractor': lambda state_info: [state_info],
     'has_labels': True,
-    'x_to_f_ratio': 0,
+    'f_scalar': 0,
 }
 config_index['mnist_multigoal'] = config
 # simple mnist config with linear action dynamics
@@ -85,7 +99,7 @@ config = {
     'feature_extractor': lambda state_info: [state_info == 0],
     'feature_shape': [1, 2],
     'feature_type': "softmax",
-    'x_to_f_ratio': 0,
+    'f_scalar': 0,
     'has_labels': True,
     'label_extractor': lambda state_info: [state_info],
     'maxhorizon': 3,
@@ -100,7 +114,7 @@ config = {
     'feature_extractor': lambda state_info: [state_info == 0],
     'feature_shape': [1, 2],
     'feature_type': "softmax",
-    'x_to_f_ratio': 0,
+    'f_scalar': 0,
     'has_labels': True,
     'label_extractor': lambda state_info: [state_info],
     'maxhorizon': 3,
@@ -118,7 +132,7 @@ config = {
     'feature_shape': [1, 2], # one feature, with two possible classes
     'feature_type': 'softmax',
     'label_extractor': lambda state_info: [state_info],
-    'x_to_f_ratio': 0,
+    'f_scalar': 0,
     'sigmoid_latents': True,
     'has_labels': True,
     'x_to_gb_ratio': 0.5,
@@ -136,19 +150,33 @@ config = {
     'has_labels': True,
 }
 config_index['mnist_multigoal_wfeat_wsig'] = config
-# simple linear config (w features and sigmoided latents)
+# simple linear config
 config = {
     'env': 'mnist-linear-v0',
-    'feature_extractor': lambda state_info: [state_info],
-    'feature_shape': [1, 10], # one feature, with two possible classes
+    'feature_extractor': lambda state_info: [state_info==0],
+    'feature_shape': [1, 2], # one feature, with two possible classes
     'feature_type': 'softmax',
     'label_extractor': lambda state_info: [state_info],
-    'sigmoid_latents': True,
     'has_labels': True,
+    'f_scalar' : 0,
     'use_goal_boosting': True,
     'x_to_gb_ratio': 0.5,
 }
-config_index['mnist_linear_wfeat_wsig_wgb'] = config
+config_index['mnist_linear_wgb'] = config
+# simple linear config without latent consistency
+config = {
+    'env': 'mnist-linear-v0',
+    'feature_extractor': lambda state_info: [state_info==0],
+    'feature_shape': [1, 2], # one feature, with two possible classes
+    'feature_type': 'softmax',
+    'label_extractor': lambda state_info: [state_info],
+    'has_labels': True,
+    'f_scalar' : 0,
+    'x_scalar' : 0,
+    'use_goal_boosting': True,
+    'x_to_gb_ratio': 0.5,
+}
+config_index['mnist_linear_wgb_noxloss'] = config
 # simple multi-goal config (w features and sigmoided latents and an agent that
 # uses learning to explore)
 config = {
@@ -158,11 +186,9 @@ config = {
     'feature_type': 'softmax',
     'label_extractor': lambda state_info: [state_info],
     'has_labels': True,
-    'sigmoid_latents': True,
     'training_agent': 'random_rollout',
-
 }
-config_index['mnist_multigoal_wfeat_wsig_wagent'] = config
+config_index['mnist_multigoal_wfeat_wagent'] = config
 # simplified mnist-9game config (fully observable)
 config = {
     'env': 'mnist-9game-simple-v0',

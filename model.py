@@ -152,15 +152,16 @@ class EnvModel:
     # -------------- LOSS FUNCTIONS -----------------------------------
 
     def trajectory_loss(self,
-             states,
-             actions,
-             features,
-             goal_states=None,
-             goal_values=None,
-             seq_length=None,
-             max_horizon=10,
-             x_to_f_ratio=1,
-             x_to_g_ratio=1):
+                        states,
+                        actions,
+                        features,
+                        goal_states=None,
+                        goal_values=None,
+                        seq_length=None,
+                        max_horizon=10,
+                        x_scalar=1,
+                        f_scalar=1,
+                        g_scalar=1):
         '''
         Estimates MSE prediction loss for features given states, actions, and a
         true feature_extractor. REQUIRED: T = self.max_horizon >= t > 0
@@ -264,23 +265,23 @@ class EnvModel:
 
         if self.sigmoid_latents:
             latent_diff = zero_out(
-                tf.norm(tf.sigmoid(tf.stop_gradient(x_future)) -
+                tf.norm(tf.sigmoid(x_future) -
                         tf.sigmoid(x_future_hat),
                         ord=1, axis=2),
                 seq_length, max_horizon)
         else:
             latent_diff = tf.reduce_mean(zero_out(
-                tf.squared_difference(tf.stop_gradient(x_future),
+                tf.squared_difference(x_future,
                                       x_future_hat),
                 seq_length, max_horizon),
                 axis=2)
         latent_loss = tf.reduce_mean(latent_diff, name='latent_loss')
         if use_goals:
-            total_loss = tf.identity(latent_loss + x_to_f_ratio*feature_loss +
-                                     x_to_g_ratio*goal_loss,
+            total_loss = tf.identity(x_scalar*latent_loss + f_scalar*feature_loss +
+                                     g_scalar*goal_loss,
                                      name="overall_loss")
         else:
-            total_loss = tf.identity(feature_loss + x_to_f_ratio*latent_loss,
+            total_loss = tf.identity(x_scalar*feature_loss + f_scalar*latent_loss,
                                      name="overall_loss")
 
         with tf.variable_scope("overall"):

@@ -14,7 +14,7 @@ default_params = {
     'g_scalar': 1,
     'x_scalar': 1,
     'maxhorizon':8,
-    'sigmoid_latents': True,
+    'sigmoid_latents': False,
     'use_goalstates': True,
     'minhorizon': 1,
     'transition_stacked_dim': 1,
@@ -123,7 +123,19 @@ config = {
     'x_to_gb_ratio': 0.5,
     'sigmoid_latents': True,
 }
-config_index['mnist_linear_nfeat_fewstep_wgb_wsig'] = config
+config_index['mnist_linear_fewstep_wgb'] = config
+config = {
+    'env': 'mnist-v0',
+    'feature_extractor': lambda state_info: [state_info == 0],
+    'feature_shape': [1, 2], # one feature, with two possible classes
+    'feature_type': 'softmax',
+            # label_extractor - (optional) function from info['state'/'next_state']
+                # to label. If provided, output includes a fourth column, "labels"
+    'label_extractor': lambda state_info: [state_info],
+    'has_labels': True,
+    'f_scalar': 0,
+}
+config_index['mnist_simple'] = config
 # simple multi-goal config (no features, yes sigmoided latents and an agent that
 # uses learning to explore)
 config = {
@@ -198,4 +210,14 @@ config = {
     'label_extractor': lambda state_info: state_info[2][0],
     'has_labels': True,
 }
-config_index['9game_simple_wfeatures'] = config
+config_index['9game_wfeat'] = config
+# 3-column mnist flipgame (with only 0s and 1s)
+config = {
+    'env': 'flipgame-v0',
+    'feature_extractor': lambda state_info: state_info,
+    'feature_shape': [3, 3, 2],
+    'feature_type': 'softmax',
+    'label_extractor': lambda state_info: state_info[2][0],
+    'has_labels': True,
+}
+config_index['flipgame_wfeat'] = config

@@ -81,7 +81,7 @@ config = {
     'transition_stacked_dim': 2,
     'f_scalar': 0,
 }
-config_index['transition_stacked_dim'] = config
+config_index['mnist_simple_2lt'] = config
 # simple multi-goal config (no features)
 config = {
     'env': 'mnist-multigoal-v0',

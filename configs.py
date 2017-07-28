@@ -121,7 +121,6 @@ config = {
     'minhorizon': 1,
     'use_goal_boosting': True,
     'x_to_gb_ratio': 0.5,
-    'sigmoid_latents': True,
 }
 config_index['mnist_linear_2step_wgb'] = config
 # simple mnist config with linear action dynamics
@@ -137,7 +136,6 @@ config = {
     'minhorizon': 1,
     'use_goal_boosting': True,
     'x_to_gb_ratio': 0.5,
-    'sigmoid_latents': True,
 }
 config_index['mnist_linear_4step_wgb'] = config
 config = {

@@ -69,8 +69,10 @@ with tf.Session() as sess:
     cv2.namedWindow("env_state", cv2.WINDOW_NORMAL)
     cv2.namedWindow("env_goal", cv2.WINDOW_NORMAL)
     cv2.namedWindow("envmodel_state", cv2.WINDOW_NORMAL)
+    # valid_actions = "wasd"
+    valid_actions = '123456789'
     for _ in range(30):
-        s = env.reset()
+        s, _ = env.reset()
         cv2.imshow("env_state", cv2.resize(s, None, fx=5, fy=5))
         x = envmodel.encode(s)
         if use_latent_visualizer:
@@ -85,11 +87,11 @@ with tf.Session() as sess:
             action = getch()
             if action == 'q':
                 exit()
-            elif action not in "wasd":
-                print("Input must be WASD, was {}".format(action))
+            elif action not in valid_actions:
+                print("Input must be one of {}, was {}".format(valid_actions, action))
                 continue # next loop iteration
             else:
-                action = "wasd".find(action)
+                action = valid_actions.find(action)
             s, rew, done, info = env.step(action)
             x, _ = envmodel.stepforward(x, action)
             if use_latent_visualizer:

@@ -7,7 +7,7 @@ default_params = {
 # Parameters meant to make older paramfiles forwards-compatible
 # Must all be primitives, because we will make a shallow copy
     'stepsize': 1e-4,
-    'maxsteps': 1e7,
+    'maxsteps': 5e6,
     'has_labels': False,
     'latent_size': 128,
     'f_scalar': 1,
@@ -107,7 +107,7 @@ config = {
     'use_goal_boosting': True,
     'x_to_gb_ratio': 0.5,
 }
-config_index['mnist_linear_nfeat_fewstep_wgb'] = config
+config_index['mnist_linear_3step_wgb'] = config
 # simple mnist config with linear action dynamics
 config = {
     'env': 'mnist-linear-v0',
@@ -117,13 +117,29 @@ config = {
     'f_scalar': 0,
     'has_labels': True,
     'label_extractor': lambda state_info: [state_info],
-    'maxhorizon': 3,
+    'maxhorizon': 2,
     'minhorizon': 1,
     'use_goal_boosting': True,
     'x_to_gb_ratio': 0.5,
     'sigmoid_latents': True,
 }
-config_index['mnist_linear_fewstep_wgb'] = config
+config_index['mnist_linear_2step_wgb'] = config
+# simple mnist config with linear action dynamics
+config = {
+    'env': 'mnist-linear-v0',
+    'feature_extractor': lambda state_info: [state_info == 0],
+    'feature_shape': [1, 2],
+    'feature_type': "softmax",
+    'f_scalar': 0,
+    'has_labels': True,
+    'label_extractor': lambda state_info: [state_info],
+    'maxhorizon': 4,
+    'minhorizon': 1,
+    'use_goal_boosting': True,
+    'x_to_gb_ratio': 0.5,
+    'sigmoid_latents': True,
+}
+config_index['mnist_linear_4step_wgb'] = config
 config = {
     'env': 'mnist-v0',
     'feature_extractor': lambda state_info: [state_info == 0],

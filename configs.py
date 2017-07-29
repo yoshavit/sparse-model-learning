@@ -94,6 +94,8 @@ config = {
 }
 config_index['mnist_multigoal'] = config
 
+# ------------------ LINEAR HORIZON-VARYING -----------------------
+basename = "mnist_linear_"
 # simple mnist config with linear action dynamics
 config = {
     'env': 'mnist-linear-v0',
@@ -103,112 +105,18 @@ config = {
     'f_scalar': 0,
     'has_labels': True,
     'label_extractor': lambda state_info: [state_info],
-    'maxhorizon': 2,
-    'use_goal_boosting': True,
     'x_to_gb_ratio': 0.5,
 }
-config_index['mnist_linear_2step_wgb'] = config
-# simple mnist config with linear action dynamics
-config = {
-    'env': 'mnist-linear-v0',
-    'feature_extractor': lambda state_info: [state_info == 0],
-    'feature_shape': [1, 2],
-    'feature_type': "softmax",
-    'f_scalar': 0,
-    'has_labels': True,
-    'label_extractor': lambda state_info: [state_info],
-    'maxhorizon': 3,
-    'use_goal_boosting': True,
-    'x_to_gb_ratio': 0.5,
-}
-config_index['mnist_linear_3step_wgb'] = config
-# simple mnist config with linear action dynamics
-config = {
-    'env': 'mnist-linear-v0',
-    'feature_extractor': lambda state_info: [state_info == 0],
-    'feature_shape': [1, 2],
-    'feature_type': "softmax",
-    'f_scalar': 0,
-    'has_labels': True,
-    'label_extractor': lambda state_info: [state_info],
-    'maxhorizon': 4,
-    'use_goal_boosting': True,
-    'x_to_gb_ratio': 0.5,
-}
-config_index['mnist_linear_4step_wgb'] = config
-# simple mnist config with linear action dynamics
-config = {
-    'env': 'mnist-linear-v0',
-    'feature_extractor': lambda state_info: [state_info == 0],
-    'feature_shape': [1, 2],
-    'feature_type': "softmax",
-    'f_scalar': 0,
-    'has_labels': True,
-    'label_extractor': lambda state_info: [state_info],
-    'maxhorizon': 5,
-    'use_goal_boosting': True,
-    'x_to_gb_ratio': 0.5,
-}
-config_index['mnist_linear_5step_wgb'] = config
-
-# simple mnist config with linear action dynamics
-config = {
-    'env': 'mnist-linear-v0',
-    'feature_extractor': lambda state_info: [state_info == 0],
-    'feature_shape': [1, 2],
-    'feature_type': "softmax",
-    'f_scalar': 0,
-    'has_labels': True,
-    'label_extractor': lambda state_info: [state_info],
-    'maxhorizon': 2,
-}
-config_index['mnist_linear_2step'] = config
-# simple mnist config with linear action dynamics
-config = {
-    'env': 'mnist-linear-v0',
-    'feature_extractor': lambda state_info: [state_info == 0],
-    'feature_shape': [1, 2],
-    'feature_type': "softmax",
-    'f_scalar': 0,
-    'has_labels': True,
-    'label_extractor': lambda state_info: [state_info],
-    'maxhorizon': 3,
-}
-config_index['mnist_linear_3step'] = config
-# simple mnist config with linear action dynamics
-config = {
-    'env': 'mnist-linear-v0',
-    'feature_extractor': lambda state_info: [state_info == 0],
-    'feature_shape': [1, 2],
-    'feature_type': "softmax",
-    'f_scalar': 0,
-    'has_labels': True,
-    'label_extractor': lambda state_info: [state_info],
-    'maxhorizon': 4,
-}
-config_index['mnist_linear_4step'] = config
-# simple mnist config with linear action dynamics
-config = {
-    'env': 'mnist-linear-v0',
-    'feature_extractor': lambda state_info: [state_info == 0],
-    'feature_shape': [1, 2],
-    'feature_type': "softmax",
-    'f_scalar': 0,
-    'has_labels': True,
-    'label_extractor': lambda state_info: [state_info],
-    'maxhorizon': 5,
-}
-config_index['mnist_linear_5step'] = config
-
-
-
-
-
-
-
-
-
-
+for i in range(2, 6):
+    for use_gb in [True, False]:
+        config.update({'maxhorizon': i, 'use_goal_boosting': use_gb})
+        name = basename + '%dstep'%i + use_gb*'_wgb'
+        config_index[name] = config.copy()
+config.update({'maxhorizon': 3, 'use_goal_boosting': True})
+for i in range(1, 6):
+    config.update({'x_scalar': 10.0**(-i)})
+    name = basename + 'xe-%d'%i
+    config_index[name] = config.copy()
 
 # simple multi-goal config (no features, yes sigmoided latents and an agent that
 # uses learning to explore)

@@ -22,7 +22,7 @@ class ModelLearner:
         self.env = env
         self.config = config
         maxhorizon = config['maxhorizon']
-        self.summary_writer=summary_writer
+        self.summary_writer = summary_writer
         feature_shape = config['feature_shape']
         self.global_step = tf.get_variable(
             "global_step", [], tf.int32,
@@ -87,29 +87,30 @@ class ModelLearner:
         self.train_op = tf.group(
             tf.train.AdamOptimizer(config['stepsize']).apply_gradients(grads_and_vars),
             inc_step)
-        with tf.variable_scope("embedding"):
-            self.num_embed_vectors = 1024
-            latent_tensors = [tf.squeeze(tensor, axis=1)
-                              for tensor in tf.split(latents,
-                                                     maxhorizon+1,
-                                                     axis=1)]
-            self.latent_variables = [tf.Variable(
-                tf.zeros([self.num_embed_vectors, config['latent_size']]),
-                trainable=False, name="latent%i"%i)
-                for i in range(maxhorizon + 1)]
-            self.embeddings_op = [tf.assign(variable, tensor) for variable, tensor
-                                  in zip(self.latent_variables, latent_tensors)]
-            self.projectorconfig = projector.ProjectorConfig()
-            logdir = self.summary_writer.get_logdir()
-            for i in range(maxhorizon + 1):
-                latent = self.latent_variables[i]
-                embedding = self.projectorconfig.embeddings.add()
-                embedding.tensor_name = latent.name
-                embedding.sprite.image_path = os.path.join(logdir,
-                                                           'embed_sprite%d.png'%i)
-                if config['has_labels']:
-                    embedding.metadata_path = os.path.join(logdir,
-                                                           'embed_labels%d.tsv'%i)
+        if summary_writer:
+            with tf.variable_scope("embedding"):
+                self.num_embed_vectors = 1024
+                latent_tensors = [tf.squeeze(tensor, axis=1)
+                                  for tensor in tf.split(latents,
+                                                         maxhorizon+1,
+                                                         axis=1)]
+                self.latent_variables = [tf.Variable(
+                    tf.zeros([self.num_embed_vectors, config['latent_size']]),
+                    trainable=False, name="latent%i"%i)
+                    for i in range(maxhorizon + 1)]
+                self.embeddings_op = [tf.assign(variable, tensor) for variable, tensor
+                                      in zip(self.latent_variables, latent_tensors)]
+                self.projectorconfig = projector.ProjectorConfig()
+                logdir = self.summary_writer.get_logdir()
+                for i in range(maxhorizon + 1):
+                    latent = self.latent_variables[i]
+                    embedding = self.projectorconfig.embeddings.add()
+                    embedding.tensor_name = latent.name
+                    embedding.sprite.image_path = os.path.join(logdir,
+                                                               'embed_sprite%d.png'%i)
+                    if config['has_labels']:
+                        embedding.metadata_path = os.path.join(logdir,
+                                                               'embed_labels%d.tsv'%i)
         self.summary_op = tf.summary.merge([base_summary, timestep_summary])
 
     def train_model(self, sess, states, actions, features, goal_values,
@@ -147,10 +148,10 @@ class ModelLearner:
             feed_dict[self.gb_goal_states] = gb_goal_states
         fetched = sess.run(fetches, feed_dict=feed_dict)
         self.local_steps += 1
-        if do_summary:
+        if do_summary and self.summary_writer:
             self.summary_writer.add_summary(fetched[2], fetched[1])
             self.summary_writer.flush()
-        if show_embeddings:
+        if show_embeddings and self.summary_writer:
             assert states.shape[0] == self.num_embed_vectors, "batch_size when embedding vectors must be modellearner.num_embed_vectors, because embedding variable size must be prespecified"
             for i in range(self.config['maxhorizon'] + 1):
                 embedding = self.projectorconfig.embeddings[i]
@@ -229,7 +230,7 @@ class ModelLearner:
         return np.stack(last_states, axis=0), np.stack(goal_states, axis=0)
 
     def create_transition_dataset(self, n=None, feature_from_info=True,
-                                 variable_steps=True):
+                                  max_steps=None, variable_steps=True):
         """Constructs a list of model input matrices representing the
         components of the transitions. No guarantee of ordering or lack thereof ordering.
 
@@ -243,7 +244,7 @@ class ModelLearner:
         assert self.replay_memory, "Must gather_gameplay_data before creating\
 transition dataset!"
         transition_seqs = []
-        max_steps = self.config['maxhorizon'] # num forward transition steps
+        max_steps = max_steps if max_steps else self.config['maxhorizon'] # num forward transition steps
         min_steps = self.config['minhorizon']
         candidate_steps = list(range(min_steps, max_steps+1)) if variable_steps else [max_steps]
         for game in self.replay_memory:

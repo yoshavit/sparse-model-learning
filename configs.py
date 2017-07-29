@@ -162,7 +162,7 @@ config = {
     'label_extractor': lambda state_info: [state_info],
     'maxhorizon': 2,
 }
-config_index['mnist_linear_2step_wgb'] = config
+config_index['mnist_linear_2step'] = config
 # simple mnist config with linear action dynamics
 config = {
     'env': 'mnist-linear-v0',
@@ -174,7 +174,7 @@ config = {
     'label_extractor': lambda state_info: [state_info],
     'maxhorizon': 3,
 }
-config_index['mnist_linear_3step_wgb'] = config
+config_index['mnist_linear_3step'] = config
 # simple mnist config with linear action dynamics
 config = {
     'env': 'mnist-linear-v0',
@@ -186,7 +186,7 @@ config = {
     'label_extractor': lambda state_info: [state_info],
     'maxhorizon': 4,
 }
-config_index['mnist_linear_4step_wgb'] = config
+config_index['mnist_linear_4step'] = config
 # simple mnist config with linear action dynamics
 config = {
     'env': 'mnist-linear-v0',
@@ -198,7 +198,7 @@ config = {
     'label_extractor': lambda state_info: [state_info],
     'maxhorizon': 5,
 }
-config_index['mnist_linear_5step_wgb'] = config
+config_index['mnist_linear_5step'] = config
 
 
 

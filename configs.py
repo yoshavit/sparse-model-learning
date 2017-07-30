@@ -107,7 +107,7 @@ config = {
     'label_extractor': lambda state_info: [state_info],
     'x_to_gb_ratio': 0.5,
 }
-for i in range(2, 6):
+for i in range(1, 7):
     for use_gb in [True, False]:
         config.update({'maxhorizon': i, 'use_goal_boosting': use_gb})
         name = basename + '%dstep'%i + use_gb*'_wgb'

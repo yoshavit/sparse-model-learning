@@ -167,12 +167,13 @@ config = {
     'feature_type': 'softmax',
     'label_extractor': lambda state_info: [state_info],
     'has_labels': True,
+    'maxhorizon': 3,
     'f_scalar' : 0,
     'x_scalar' : 0,
     'use_goal_boosting': True,
     'x_to_gb_ratio': 0.5,
 }
-config_index['mnist_linear_wgb_noxloss'] = config
+config_index['mnist_linear_3step_wgb_noxloss'] = config
 # simple multi-goal config (w features and sigmoided latents and an agent that
 # uses learning to explore)
 config = {

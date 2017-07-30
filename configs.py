@@ -117,6 +117,20 @@ for i in range(1, 6):
     config.update({'x_scalar': 10.0**(-i)})
     name = basename + 'xe-%d'%i
     config_index[name] = config.copy()
+# -----------------------------------------------------------------
+config = {
+    'env': 'mnist-linear-v0',
+    'feature_extractor': lambda state_info: [state_info == 0],
+    'feature_shape': [1, 10],
+    'feature_type': "softmax",
+    'f_scalar': 1,
+    'has_labels': True,
+    'label_extractor': lambda state_info: [state_info],
+    'x_to_gb_ratio': 0.5,
+    'use_goal_boosting': True,
+}
+config_index['mnist_linear_wfeat_wgb'] = config
+
 
 # simple multi-goal config (no features, yes sigmoided latents and an agent that
 # uses learning to explore)
@@ -144,19 +158,7 @@ config = {
     'has_labels': True,
 }
 config_index['mnist_multigoal_wfeat_wsig'] = config
-# simple linear config
-config = {
-    'env': 'mnist-linear-v0',
-    'feature_extractor': lambda state_info: [state_info==0],
-    'feature_shape': [1, 2], # one feature, with two possible classes
-    'feature_type': 'softmax',
-    'label_extractor': lambda state_info: [state_info],
-    'has_labels': True,
-    'f_scalar' : 0,
-    'use_goal_boosting': True,
-    'x_to_gb_ratio': 0.5,
-}
-config_index['mnist_linear_wgb'] = config
+
 # simple linear config without latent consistency
 config = {
     'env': 'mnist-linear-v0',

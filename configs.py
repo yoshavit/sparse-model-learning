@@ -113,7 +113,7 @@ for i in range(2, 6):
         name = basename + '%dstep'%i + use_gb*'_wgb'
         config_index[name] = config.copy()
 config.update({'maxhorizon': 3, 'use_goal_boosting': True})
-for i in range(1, 6):
+for i in range(0, 7):
     config.update({'x_scalar': 10.0**(-i)})
     name = basename + 'xe-%d'%i
     config_index[name] = config.copy()

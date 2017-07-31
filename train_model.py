@@ -81,7 +81,7 @@ with tf.Session() as sess:
     logger.info("To visualize, call:\ntensorboard --logdir={}".format(logdir))
     from utils import dataset
     while (not config['maxsteps']) or global_step < config['maxsteps']:
-        transition_data = ml.create_transition_dataset(n=10000)
+        transition_data = ml.create_transition_sequence_dataset(n=10000)
         if config['use_goal_boosting']:
             gb_data = ml.create_goals_dataset(n=1000)
             gb_data_batches = dataset.iterbatches(gb_data,
@@ -100,7 +100,7 @@ with tf.Session() as sess:
             # Train a single step of ml.num_embed_vectors instances
             logger.info("Saving weights, creating embedding...")
             # create a dataset of max_horizon length transitions
-            transition_data = ml.create_transition_dataset(n=ml.num_embed_vectors,
+            transition_data = ml.create_transition_sequence_dataset(n=ml.num_embed_vectors,
                                                            variable_steps=False)
             batch = next(dataset.iterbatches(transition_data,
                                              batch_size=ml.num_embed_vectors,

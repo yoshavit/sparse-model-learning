@@ -229,7 +229,7 @@ class ModelLearner:
                 goal_states.append(info['goal_state'])
         return np.stack(last_states, axis=0), np.stack(goal_states, axis=0)
 
-    def create_transition_dataset(self, n=None, feature_from_info=True,
+    def create_transition_sequence_dataset(self, n=None, feature_from_info=True,
                                   max_steps=None, variable_steps=True):
         """Constructs a list of model input matrices representing the
         components of the transitions. No guarantee of ordering or lack thereof ordering.
@@ -301,6 +301,7 @@ transition dataset!"
             # for j in range(len(output[-1][0])):
                 # counts[output[-1][i][j][0]] += 1
         return output
+
 
 # TODO: feature_extractor specs are inconsistent - some take single val, others
 # multiple

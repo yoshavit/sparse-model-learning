@@ -1,3 +1,4 @@
+import os
 from tensorflow.python.training.saver import get_checkpoint_state, _prefix_to_checkpoint_path, file_io, logging, saver_pb2
 import re
 def latest_checkpoint(checkpoint_dir, latest_filename=None):
@@ -14,10 +15,7 @@ def latest_checkpoint(checkpoint_dir, latest_filename=None):
   ckpt = get_checkpoint_state(checkpoint_dir, latest_filename)
   # strips directory-identifying component from path
   suffix = re.search("model\.ckpt.+", ckpt.model_checkpoint_path).group(0)
-  print(ckpt.model_checkpoint_path)
-  print(suffix)
-  print(checkpoint_dir)
-  path = checkpoint_dir + suffix
+  path = os.path.join(checkpoint_dir, suffix)
   if ckpt and path:
     # Look for either a V2 path or a V1 path, with priority for V2.
     v2_path = _prefix_to_checkpoint_path(path,
@@ -29,5 +27,5 @@ def latest_checkpoint(checkpoint_dir, latest_filename=None):
       return path
     else:
       logging.error("Couldn't match files for checkpoint %s",
-                    ckpt.model_checkpoint_path)
+                    path)
   return None

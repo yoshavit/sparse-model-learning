@@ -70,7 +70,6 @@ class BFSAgent:
             node = q.popleft()
             depth = node[-1]
             if depth == self.horizon:
-                print(depth)
                 break
             x = node[0]
             x = np.tile(x, [4, 1])

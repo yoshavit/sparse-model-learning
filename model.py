@@ -6,7 +6,7 @@ class EnvModel:
     def __init__(self, ob_space, ac_space, feature_shape,
                  uses_goal_states=True,
                  latent_size=128, transition_stacked_dim=1,
-                 feature_type="regression", sigmoid_latents=True):
+                 feature_type="regression", sigmoid_latents=False):
         """Creates a model-learner framework
         transition_stacked_dim is the number of stacked cells for each timestep
         in the transition model
@@ -281,7 +281,7 @@ class EnvModel:
                                      g_scalar*goal_loss,
                                      name="overall_loss")
         else:
-            total_loss = tf.identity(x_scalar*feature_loss + f_scalar*latent_loss,
+            total_loss = tf.identity(f_scalar*feature_loss + x_scalar*latent_loss,
                                      name="overall_loss")
 
         with tf.variable_scope("overall"):
@@ -375,10 +375,11 @@ class EnvModel:
         return latent_state
 
     def stepforward(self, latent_state, actions):
+        actions = np.asarray(actions)
         single_run = latent_state.ndim == 1
         batchsize = 1 if single_run else latent_state.shape[0]
-        actions = np.asarray(actions)
         if actions.ndim == 0: actions = np.expand_dims(actions, 1)
+        if actions.ndim == 1 and not single_run: actions = np.expand_dims(actions, -1)
         actions_dim_minus_batchdim = actions.shape[0] if single_run else actions.shape[1]
         latent_state = self.__reshape_batch(latent_state, [self.latent_size])
         actions = self.__reshape_batch(actions,
@@ -402,6 +403,8 @@ class EnvModel:
         return f
 
     def checkgoal(self, latent_state, latent_goal=None):
+        latent_state = np.asarray(latent_state)
+        latent_goal = np.asarray(latent_goal)
         single_run = latent_state.ndim == 1
         batchsize = 1 if single_run else latent_state.shape[0]
         latent_state = self.__reshape_batch(latent_state, [self.latent_size])

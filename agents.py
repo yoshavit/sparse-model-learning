@@ -49,5 +49,56 @@ class RandomRolloutAgent:
         best_rollout = np.argmax(max_goal_per_rollout)
         return actions[best_rollout]
 
+import collections
+class BFSAgent:
+    def __init__(self, envmodel, horizon=5):
+        self.envmodel = envmodel
+        self.horizon = horizon
+
+    def policy(self, s, sg):
+        x0 = self.envmodel.encode(s)
+        actions = np.arange(self.envmodel.ac_space)
+        xg = self.envmodel.encode(sg)
+        xg_tiled = np.tile(np.expand_dims(xg, axis=0), [len(actions), 1])
+        q = collections.deque()
+        depth = 0
+        node0 = [x0, 0, None, None, depth] # latent, goalvalue, preceding action, parent, depth
+        q.append(node0)
+        best_node = None
+        best_node_value = -np.Inf
+        while len(q) != 0:
+            node = q.popleft()
+            depth = node[-1]
+            if depth == self.horizon:
+                print(depth)
+                break
+            x = node[0]
+            x = np.tile(x, [4, 1])
+            _, xn = self.envmodel.stepforward(x, actions)
+            xn = np.squeeze(xn, axis=1)
+            gn = self.envmodel.checkgoal(xn, xg_tiled)
+            for a in range(len(actions)):
+                newnode = [xn[a, :], gn[a], a, node, depth+1]
+                q.append(newnode)
+                if gn[a] > best_node_value:
+                    best_node = newnode
+                    best_node_value = gn[a]
+        best_node_actions = []
+        parent = best_node
+        while parent is not None:
+            best_node_actions.append(parent[2])
+            parent = parent[3]
+        best_node_actions.pop() # remove the None action at the end
+        return list(reversed(best_node_actions)), best_node_value
+
+
+
+
+
+
+
+
+
+
 
 

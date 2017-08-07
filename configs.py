@@ -78,10 +78,13 @@ config = {
                 # to label. If provided, output includes a fourth column, "labels"
     'label_extractor': lambda state_info: [state_info],
     'has_labels': True,
+    'maxhorizon': 6,
     'transition_stacked_dim': 2,
     'f_scalar': 0,
 }
-config_index['mnist_simple_2lt'] = config
+config_index['mnist_simple_3lt'] = config.copy()
+config.update({'env': 'mnist-linear-v0'})
+config_index['mnist_linear_3lt'] = config.copy()
 # simple multi-goal config (no features)
 config = {
     'env': 'mnist-multigoal-v0',
@@ -102,6 +105,7 @@ config = {
     'feature_extractor': lambda state_info: [state_info == 0],
     'feature_shape': [1, 2],
     'feature_type': "softmax",
+    'transition_stacked_dim': 1,
     'f_scalar': 0,
     'has_labels': True,
     'label_extractor': lambda state_info: [state_info],
@@ -112,26 +116,36 @@ for i in range(1, 7):
         config.update({'maxhorizon': i, 'use_goal_boosting': use_gb})
         name = basename + '%dstep'%i + use_gb*'_wgb'
         config_index[name] = config.copy()
-config.update({'maxhorizon': 3, 'use_goal_boosting': True})
+config.update({'maxhorizon': 2, 'use_goal_boosting': True})
 for i in range(0, 7):
     config.update({'x_scalar': 10.0**(-i)})
     name = basename + 'xe-%d'%i
     config_index[name] = config.copy()
-# -----------------------------------------------------------------
+config.update({'use_goal_boosting': False, 'env': 'mnist-v0'})
+# ----------- MNIST REGULAR HORIZON VARYING --------------
+basename = 'mnist_simple_'
+for i in range(1, 9):
+    config.update({'maxhorizon': i})
+    name = basename + '%dstep'%i
+    config_index[name] = config.copy()
+# ----------- MNIST WFEATURES FEATURE-DENSITY-VARYING ------------
 config = {
-    'env': 'mnist-linear-v0',
-    'feature_extractor': lambda state_info: [state_info == 0],
-    'feature_shape': [1, 10],
-    'feature_type': "softmax",
-    'f_scalar': 1,
+    'env': 'mnist-v0',
+    'maxhorizon': 3,
     'has_labels': True,
+    'f_scalar': 1,
     'label_extractor': lambda state_info: [state_info],
-    'x_to_gb_ratio': 0.5,
-    'use_goal_boosting': True,
 }
-config_index['mnist_linear_wfeat_wgb'] = config
+basename = 'mnist_wfeat_complex_'
+for i in [2, 3, 4, 5, 10]:
+    config.update({
+        'feature_extractor': lambda state_info: [state_info%i],
+        'feature_type': 'softmax',
+        'feature_shape': [1, i]})
+    name = basename + 'mod%d'%i
+    config_index[name] = config.copy()
 
-
+# -----------------------------------------------------------------
 # simple multi-goal config (no features, yes sigmoided latents and an agent that
 # uses learning to explore)
 config = {
@@ -170,10 +184,8 @@ config = {
     'maxhorizon': 3,
     'f_scalar' : 0,
     'x_scalar' : 0,
-    'use_goal_boosting': True,
-    'x_to_gb_ratio': 0.5,
 }
-config_index['mnist_linear_3step_wgb_noxloss'] = config
+config_index['mnist_linear_3step_noxloss'] = config
 # simple multi-goal config (w features and sigmoided latents and an agent that
 # uses learning to explore)
 config = {

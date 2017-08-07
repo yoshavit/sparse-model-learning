@@ -393,6 +393,7 @@ class EnvModel:
         return nx, nxs
 
     def getfeatures(self, latent_state):
+        latent_state = np.asarray(latent_state)
         single_run = latent_state.ndim == 1
         batchsize = 1 if single_run else latent_state.shape[0]
         latent_state = self.__reshape_batch(latent_state, [self.latent_size])

@@ -54,8 +54,6 @@ def get_config(configid):
         config[k] = v
     return config
 
-
-
 config = {
     'env': 'mnist-v0',
     'feature_extractor': lambda state_info: [state_info == 0],
@@ -144,6 +142,38 @@ for i in [2, 3, 4, 5, 10]:
         'feature_shape': [1, i]})
     name = basename + 'mod%d'%i
     config_index[name] = config.copy()
+# ----------- FLIPGAME vs. ROTGAME FEATURE VISIBILITY VARYING -----
+config = {
+    'maxhorizon':3,
+    'has_labels': True,
+    'f_scalar': 1,
+    'label_extractor': lambda state_info: [state_info[0, 0]*10 +
+                                           state_info[1,0]],
+    'use_goal_boosting': False,
+}
+for envid in ['flipgame', 'rotgame']:
+    basename = envid + '_wfeat_'
+    config.update({
+        'env': envid + '-v0',
+        'feature_shape': [2, 3, 3],
+        'feature_type': 'softmax',
+        'feature_extractor': lambda state_info: state_info,
+    })
+    config_index[basename + 'full'] = config.copy()
+    config.update({
+        'feature_shape': [2, 2, 3],
+        'feature_extractor': lambda state_info: state_info[:, 1:],
+    })
+    config_index[basename + 'many'] = config.copy()
+    config.update({
+        'feature_shape': [2, 1, 3],
+        'feature_extractor': lambda state_info: state_info[:, 2:],
+    })
+    config_index[basename + 'few'] = config.copy()
+    config.update({
+        'f_scalar': 0
+    })
+    config_index[basename + 'none'] = config.copy()
 
 # -----------------------------------------------------------------
 # simple multi-goal config (no features, yes sigmoided latents and an agent that

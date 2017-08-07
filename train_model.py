@@ -40,7 +40,7 @@ if args.logdir is not None:
 else:
     config = configs.get_config(args.configid)
     # logdir = os.path.join('data', config['env'], args.logname, 'train')
-    logdir = os.path.join(scriptdir, 'data', config['env'], args.logname, 'train')
+    logdir = os.path.join(scriptdir, 'data', args.logname, config['env'])
     logdir = increment_path(os.path.join(logdir, "run"))
     os.makedirs(logdir)
     configs.save_config(config, logdir)

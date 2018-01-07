@@ -26,4 +26,5 @@ For an in-depth explanation of the algorithm, see [this blog post](http://yonada
 `run_analytics.py`, `feature_analytics.py`, and `bfs_analytics.py` generate the respective figures for Chapter 3, Chapter 4, and the final model-based agents' performance.
 
 ![Example learned latent space](/figures/Linear_3step_full.png)
+
 (A learned environment embedding)
